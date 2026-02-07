@@ -9,9 +9,10 @@ function App() {
   const [files, setFiles] = useState<File[]>([]);
   const [messages, setMessages] = useState<{ text: string, sender: 'user' | 'bot' }[]>([]);
   const [input, setInput] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
 
   const handleFileUpload = async (file: File) => {
-    setFiles((prev) => [...prev, file]);
+    setIsUploading(true);
 
     const formData = new FormData();
     formData.append('file', file);
@@ -24,11 +25,14 @@ function App() {
 
       if (response.ok) {
         console.log('File uploaded successfully');
+        setFiles((prev) => [...prev, file]);
       } else {
         console.error('File upload failed');
       }
     } catch (error) {
       console.error('Error uploading file:', error);
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -41,7 +45,7 @@ function App() {
 
   return (
     <Box sx={{ display: 'flex', height: '100vh', bgcolor: 'background.default' }}>
-      <Sidebar onFileUpload={handleFileUpload} uploadedFiles={files} />
+      <Sidebar onFileUpload={handleFileUpload} uploadedFiles={files} isUploading={isUploading} />
 
       <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', height: '100vh' }}>
         <Box sx={{ flexGrow: 1, p: 2, overflowY: 'auto' }}>

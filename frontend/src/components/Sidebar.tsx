@@ -1,26 +1,31 @@
 
 import React, { useRef } from 'react';
-import { Box, Button, List, ListItem, ListItemText, Typography, Divider } from '@mui/material';
+import { Box, Button, List, ListItem, ListItemText, Typography, Divider, CircularProgress } from '@mui/material';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import InsertDriveFileIcon from '@mui/icons-material/InsertDriveFile';
 
 interface SidebarProps {
     onFileUpload: (file: File) => void;
     uploadedFiles: File[];
+    isUploading: boolean;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ onFileUpload, uploadedFiles }) => {
+const Sidebar: React.FC<SidebarProps> = ({ onFileUpload, uploadedFiles, isUploading }) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (file) {
             onFileUpload(file);
+            // Reset input value to allow uploading the same file again if needed
+            event.target.value = '';
         }
     };
 
     const handleButtonClick = () => {
-        fileInputRef.current?.click();
+        if (!isUploading) {
+            fileInputRef.current?.click();
+        }
     };
 
     return (
@@ -39,22 +44,28 @@ const Sidebar: React.FC<SidebarProps> = ({ onFileUpload, uploadedFiles }) => {
                 Files
             </Typography>
 
-            <Button
-                variant="contained"
-                startIcon={<CloudUploadIcon />}
-                onClick={handleButtonClick}
-                sx={{
-                    mb: 2,
-                    bgcolor: 'black',
-                    color: 'white',
-                    '&:hover': {
-                        bgcolor: '#333',
-                    },
-                    textTransform: 'none',
-                }}
-            >
-                Upload File
-            </Button>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                <Button
+                    variant="contained"
+                    startIcon={<CloudUploadIcon />}
+                    onClick={handleButtonClick}
+                    disabled={isUploading}
+                    sx={{
+                        bgcolor: 'black',
+                        color: 'white',
+                        '&:hover': {
+                            bgcolor: '#333',
+                        },
+                        textTransform: 'none',
+                        flexGrow: 1,
+                    }}
+                >
+                    {isUploading ? 'Uploading...' : 'Upload File'}
+                </Button>
+                {isUploading && (
+                    <CircularProgress size={24} sx={{ ml: 2, color: 'black' }} />
+                )}
+            </Box>
             <input
                 type="file"
                 ref={fileInputRef}
