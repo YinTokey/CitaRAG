@@ -74,6 +74,6 @@ public class FileUploadController {
             }
         }
 
-        return ResponseEntity.ok(resultLog.toString());
+        return ResponseEntity.ok(resultLog.append("\nTotal successes: ").append(successCount).toString());
     }
 }
