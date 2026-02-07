@@ -1,4 +1,3 @@
-
 package com.yin.cita.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -56,13 +55,6 @@ public class ChunkingService {
         // Stack to track header hierarchy (H1 -> H2 -> H3)
         Stack<HeaderNode> headerStack = new Stack<>();
 
-        // Let's re-do the loop logic to be safer about context
-        chunks.clear();
-        headerStack.clear();
-        currentText.setLength(0);
-        currentMetadata.clear();
-        currentPageNumbers.clear();
-
         for (DocumentElement element : elements) {
             String text = element.getText();
             DocumentElement.Type type = element.getType();
@@ -90,7 +82,6 @@ public class ChunkingService {
                 headerStack.push(new HeaderNode(level, text));
 
                 // Start new chunk logic
-                // Should the Title text itself be part of the chunk text? Yes.
                 currentText.append(text).append("\n");
                 currentMetadata.putAll(element.getMetadata());
 
@@ -109,28 +100,13 @@ public class ChunkingService {
                 // Inject context into text for searchability
                 String chunkContent = context + "\n" + text;
                 tableChunk.put("text", chunkContent);
-                tableChunk.put("metadata", element.getMetadata());
+                tableChunk.put("metadata", new HashMap<>(element.getMetadata())); // Copy metadata
                 tableChunk.put("type", "TABLE");
 
-                // ENRICH TABLE
-                ChunkMetadata enrichment = null;
-                try {
-                    enrichment = enrichmentService.enrichChunk(chunkContent, true);
-                } catch (Exception e) {
-                    System.err.println("Enrichment failed for table: " + e.getMessage());
-                }
-
-                if (enrichment == null)
-                    enrichment = new ChunkMetadata();
-                enrichment.setPageNumber(pageNum != null ? pageNum : "");
-                enrichment.setSectionHeader(sectionHeader);
-
-                // Merge enriched metadata into the main metadata
-                Map<String, Object> finalMetadata = new HashMap<>(element.getMetadata());
-                finalMetadata.putAll(enrichment.toMap());
-                tableChunk.put("metadata", finalMetadata);
-                // Remove the separate "generated_metadata" field if exists (not adding it
-                // anymore)
+                // Store fields needed for enrichment later
+                tableChunk.put("_isTable", true);
+                tableChunk.put("_pageNum", pageNum);
+                tableChunk.put("_sectionHeader", sectionHeader);
 
                 chunks.add(tableChunk);
 
@@ -154,6 +130,9 @@ public class ChunkingService {
         if (currentText.length() > 0) {
             finalizeChunk(chunks, currentText, currentMetadata, buildContextString(headerStack), currentPageNumbers);
         }
+
+        // Parallel Enrichment Phase
+        enrichChunksParallel(chunks);
 
         return chunks;
     }
@@ -193,11 +172,9 @@ public class ChunkingService {
                 .collect(Collectors.joining(", "));
 
         if (pageRange.isEmpty() && !pageNumbers.isEmpty()) {
-            // Fallback if parsing failed
             pageRange = String.join(", ", pageNumbers);
         }
 
-        // Clean section header (remove [Context: ...])
         String sectionHeader = contextString.replace("[Context: ", "").replace("]", "");
 
         // If content is huge, split recursively, BUT prepend context to each split
@@ -205,6 +182,7 @@ public class ChunkingService {
             Document doc = Document.from(content);
             DocumentSplitter recursSplitter = DocumentSplitters.recursive(MAX_CHUNK_SIZE, OVERLAP);
             List<TextSegment> subSegments = recursSplitter.split(doc);
+
             for (TextSegment seg : subSegments) {
                 Map<String, Object> chunk = new HashMap<>();
                 String chunkContent = contextString + "\n" + seg.text();
@@ -212,50 +190,22 @@ public class ChunkingService {
                 chunk.put("metadata", new HashMap<>(currentMetadata));
                 chunk.put("type", "TEXT_SPLIT");
 
-                // ENRICH SPLIT CHUNK
-                ChunkMetadata enrichment = null;
-                try {
-                    enrichment = enrichmentService.enrichChunk(chunkContent, false);
-                } catch (Exception e) {
-                    System.err.println("Enrichment failed for split chunk: " + e.getMessage());
-                }
-
-                if (enrichment == null)
-                    enrichment = new ChunkMetadata();
-                enrichment.setPageNumber(pageRange);
-                enrichment.setSectionHeader(sectionHeader);
-
-                // Merge enriched metadata
-                Map<String, Object> finalMetadata = new HashMap<>(currentMetadata);
-                finalMetadata.putAll(enrichment.toMap());
-                chunk.put("metadata", finalMetadata);
+                chunk.put("_isTable", false);
+                chunk.put("_pageNum", pageRange);
+                chunk.put("_sectionHeader", sectionHeader);
 
                 chunks.add(chunk);
             }
         } else {
             Map<String, Object> chunk = new HashMap<>();
-
             String chunkContent = contextString + "\n" + content;
             chunk.put("text", chunkContent);
             chunk.put("type", "TEXT");
+            chunk.put("metadata", new HashMap<>(currentMetadata));
 
-            // ENRICH STANDARD CHUNK
-            ChunkMetadata enrichment = null;
-            try {
-                enrichment = enrichmentService.enrichChunk(chunkContent, false);
-            } catch (Exception e) {
-                System.err.println("Enrichment failed for chunk: " + e.getMessage());
-            }
-
-            if (enrichment == null)
-                enrichment = new ChunkMetadata();
-            enrichment.setPageNumber(pageRange);
-            enrichment.setSectionHeader(sectionHeader);
-
-            // Merge enriched metadata
-            Map<String, Object> finalMetadata = new HashMap<>(currentMetadata);
-            finalMetadata.putAll(enrichment.toMap());
-            chunk.put("metadata", finalMetadata);
+            chunk.put("_isTable", false);
+            chunk.put("_pageNum", pageRange);
+            chunk.put("_sectionHeader", sectionHeader);
 
             chunks.add(chunk);
         }
@@ -263,6 +213,50 @@ public class ChunkingService {
         currentText.setLength(0);
         currentMetadata.clear();
         pageNumbers.clear();
+    }
+
+    private void enrichChunksParallel(List<Map<String, Object>> chunks) {
+        System.out.println("Starting parallel enrichment for " + chunks.size() + " chunks...");
+
+        List<java.util.concurrent.CompletableFuture<Void>> futures = chunks.stream()
+                .map(chunk -> java.util.concurrent.CompletableFuture.runAsync(() -> {
+                    String text = (String) chunk.get("text");
+                    boolean isTable = (boolean) chunk.get("_isTable");
+                    String pageNum = (String) chunk.get("_pageNum");
+                    String sectionHeader = (String) chunk.get("_sectionHeader");
+
+                    ChunkMetadata enrichment = null;
+                    try {
+                        enrichment = enrichmentService.enrichChunk(text, isTable);
+                    } catch (Exception e) {
+                        System.err.println("Enrichment failed: " + e.getMessage());
+                    }
+
+                    if (enrichment == null)
+                        enrichment = new ChunkMetadata();
+                    enrichment.setPageNumber(pageNum != null ? pageNum : "");
+                    enrichment.setSectionHeader(sectionHeader);
+
+                    // Merge enriched metadata
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> currentMeta = (Map<String, Object>) chunk.get("metadata");
+                    if (currentMeta == null)
+                        currentMeta = new HashMap<>();
+
+                    currentMeta.putAll(enrichment.toMap());
+                    chunk.put("metadata", currentMeta);
+
+                    // Cleanup temp fields
+                    chunk.remove("_isTable");
+                    chunk.remove("_pageNum");
+                    chunk.remove("_sectionHeader");
+                }))
+                .collect(Collectors.toList());
+
+        // Wait for all to complete
+        java.util.concurrent.CompletableFuture.allOf(futures.toArray(new java.util.concurrent.CompletableFuture[0]))
+                .join();
+        System.out.println("Parallel enrichment completed.");
     }
 
     public List<String> chunkContent(String content) {

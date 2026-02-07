@@ -15,7 +15,7 @@ function App() {
     setIsUploading(true);
 
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append('files', file);
 
     try {
       const response = await fetch('http://localhost:8080/api/upload', {

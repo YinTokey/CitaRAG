@@ -13,7 +13,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
@@ -35,37 +34,46 @@ public class FileUploadController {
     }
 
     @PostMapping
-    public ResponseEntity<String> uploadFile(@RequestParam("file") MultipartFile file) {
-        if (file.isEmpty()) {
-            return ResponseEntity.badRequest().body("File is empty");
+    public ResponseEntity<String> uploadFile(@RequestParam("files") List<MultipartFile> files) {
+        if (files.isEmpty()) {
+            return ResponseEntity.badRequest().body("No files uploaded");
         }
 
-        System.out.println("Received file: " + file.getOriginalFilename());
-        try {
-            // 1. Parse File to Elements
-            List<DocumentElement> elements = fileParserService.parseFileToElements(file);
-            System.out.println("Parsed " + elements.size() + " elements.");
+        StringBuilder resultLog = new StringBuilder("Processed files:\n");
+        int successCount = 0;
 
-            // 2. Save Parsed Elements (JSON)
-            String elementsJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(elements);
-            fileParserService.saveToLocal(file.getOriginalFilename(), elementsJson);
+        for (MultipartFile file : files) {
+            System.out.println("Processing file: " + file.getOriginalFilename());
+            try {
+                // 1. Parse File to Elements
+                List<DocumentElement> elements = fileParserService.parseFileToElements(file);
+                System.out.println("Parsed " + elements.size() + " elements.");
 
-            // 3. Chunk Elements
-            List<Map<String, Object>> chunks = chunkingService.chunkElements(elements);
-            System.out.println("Generated " + chunks.size() + " chunks.");
+                // 2. Save Parsed Elements (JSON)
+                String elementsJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(elements);
+                fileParserService.saveToLocal(file.getOriginalFilename(), elementsJson);
 
-            // 4. Save Chunks
-            chunkingService.saveChunks(file.getOriginalFilename(), chunks);
+                // 3. Chunk Elements (WITH PARALLEL ENRICHMENT in service)
+                List<Map<String, Object>> chunks = chunkingService.chunkElements(elements);
+                System.out.println("Generated " + chunks.size() + " chunks.");
 
-            // 5. Store in Pinecone
-            vectorStoreService.storeChunks(chunks);
+                // 4. Save Chunks
+                chunkingService.saveChunks(file.getOriginalFilename(), chunks);
 
-            return ResponseEntity
-                    .ok("File uploaded, parsed, saved, and chunked successfully. Elements: " + elements.size()
-                            + ", Chunks: " + chunks.size());
-        } catch (IOException e) {
-            e.printStackTrace();
-            return ResponseEntity.status(500).body("Error processing file: " + e.getMessage());
+                // 5. Store in Pinecone
+                vectorStoreService.storeChunks(chunks);
+
+                resultLog.append("- ").append(file.getOriginalFilename()).append(": Success (").append(chunks.size())
+                        .append(" chunks)\n");
+                successCount++;
+
+            } catch (Exception e) {
+                e.printStackTrace();
+                resultLog.append("- ").append(file.getOriginalFilename()).append(": FAILED - ").append(e.getMessage())
+                        .append("\n");
+            }
         }
+
+        return ResponseEntity.ok(resultLog.toString());
     }
 }
