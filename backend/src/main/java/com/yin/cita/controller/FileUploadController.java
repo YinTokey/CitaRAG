@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yin.cita.model.DocumentElement;
 import com.yin.cita.service.ChunkingService;
 import com.yin.cita.service.FileParserService;
+import com.yin.cita.service.VectorStoreService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -22,12 +23,15 @@ public class FileUploadController {
 
     private final FileParserService fileParserService;
     private final ChunkingService chunkingService;
+    private final VectorStoreService vectorStoreService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Autowired
-    public FileUploadController(FileParserService fileParserService, ChunkingService chunkingService) {
+    public FileUploadController(FileParserService fileParserService, ChunkingService chunkingService,
+            VectorStoreService vectorStoreService) {
         this.fileParserService = fileParserService;
         this.chunkingService = chunkingService;
+        this.vectorStoreService = vectorStoreService;
     }
 
     @PostMapping
@@ -52,6 +56,9 @@ public class FileUploadController {
 
             // 4. Save Chunks
             chunkingService.saveChunks(file.getOriginalFilename(), chunks);
+
+            // 5. Store in Pinecone
+            vectorStoreService.storeChunks(chunks);
 
             return ResponseEntity
                     .ok("File uploaded, parsed, saved, and chunked successfully. Elements: " + elements.size()

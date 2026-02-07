@@ -73,57 +73,97 @@ public class FileParserService {
 
         // 2. Jsoup -> Elements
         Document doc = Jsoup.parse(xhtml);
+        System.out.println("Parsed XHTML: " + (xhtml.length() > 500 ? xhtml.substring(0, 500) + "..." : xhtml)); // Debug
+                                                                                                                 // logging
+
         List<DocumentElement> docElements = new ArrayList<>();
 
         // Traverse body children
         Element body = doc.body();
         if (body != null) {
             Elements children = body.children();
+            System.out.println("Found " + children.size() + " top-level elements."); // Debug logging
+            int currentPage = 1;
+
             for (Element child : children) {
-                processElement(child, docElements, filename);
+                // Check for Tika page break (div class="page")
+                if (child.hasClass("page")) {
+                    if (child.children().isEmpty()) {
+                        // Separator style <div class="page" />
+                        currentPage++;
+                    } else {
+                        // Wrapper style <div class="page">...</div>
+                        for (Element pageChild : child.children()) {
+                            processElement(pageChild, docElements, filename, currentPage);
+                        }
+                        currentPage++; // Increment after processing the page
+                    }
+                } else {
+                    processElement(child, docElements, filename, currentPage);
+                }
             }
         }
 
         return docElements;
     }
 
-    private void processElement(Element element, List<DocumentElement> docElements, String filename) {
+    private void processElement(Element element, List<DocumentElement> docElements, String filename, int pageNumber) {
         String tagName = element.tagName().toLowerCase();
+        String pageStr = String.valueOf(pageNumber);
 
         if (tagName.matches("h[1-6]")) {
             DocumentElement el = new DocumentElement(DocumentElement.Type.TITLE, element.text());
             el.addMetadata("filename", filename);
             el.addMetadata("tag", tagName);
+            el.addMetadata("page_number", pageStr);
             docElements.add(el);
-        } else if (tagName.equals("p") || tagName.equals("div") || tagName.equals("span")) {
+        } else if (tagName.equals("div")) {
+            // Check if div contains block elements (preserving structure)
+            if (!element.select("p, h1, h2, h3, h4, h5, h6, div, table, ul, ol").isEmpty()) {
+                for (Element child : element.children()) {
+                    processElement(child, docElements, filename, pageNumber);
+                }
+            } else {
+                // Treat as text container
+                String text = element.text().trim();
+                if (!text.isEmpty()) {
+                    DocumentElement el = new DocumentElement(DocumentElement.Type.NARRATIVE_TEXT, text);
+                    el.addMetadata("filename", filename);
+                    el.addMetadata("page_number", pageStr);
+                    docElements.add(el);
+                }
+            }
+        } else if (tagName.equals("p") || tagName.equals("span")) {
             String text = element.text().trim();
             if (!text.isEmpty()) {
                 DocumentElement el = new DocumentElement(DocumentElement.Type.NARRATIVE_TEXT, text);
                 el.addMetadata("filename", filename);
+                el.addMetadata("page_number", pageStr);
                 docElements.add(el);
             }
         } else if (tagName.equals("table")) {
             DocumentElement el = new DocumentElement(DocumentElement.Type.TABLE, element.text());
             el.addMetadata("filename", filename);
             el.addMetadata("text_as_html", element.outerHtml());
+            el.addMetadata("page_number", pageStr);
             docElements.add(el);
         } else if (tagName.equals("ul") || tagName.equals("ol")) {
-            // Handle lists - treat as text for now, or split?
-            // "NarrativeText" is fine given user example
-            // Iterate li?
+            // Handle lists
             for (Element li : element.children()) {
                 if (li.tagName().equals("li")) {
                     DocumentElement el = new DocumentElement(DocumentElement.Type.LIST_ITEM, li.text());
                     el.addMetadata("filename", filename);
+                    el.addMetadata("page_number", pageStr);
                     docElements.add(el);
                 }
             }
         } else {
-            // Fallback for other tags, treat as text if has text
+            // Fallback
             String text = element.text().trim();
             if (!text.isEmpty()) {
                 DocumentElement el = new DocumentElement(DocumentElement.Type.UNCATEGORIZED, text);
                 el.addMetadata("filename", filename);
+                el.addMetadata("page_number", pageStr);
                 docElements.add(el);
             }
         }
