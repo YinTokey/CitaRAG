@@ -1,9 +1,8 @@
-
 import { useState } from 'react';
 import { Box, Paper, TextField, IconButton, Typography, CircularProgress } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
-import Sidebar from './components/Sidebar';
-import RightSidebar from './components/RightSidebar';
+import UploadSection from './components/UploadSection';
+import CitationList from './components/CitationList';
 import './App.css';
 
 interface Message {
@@ -69,7 +68,7 @@ function App() {
           citations: data.citations
         };
         setMessages((prev) => [...prev, botMsg]);
-        setActiveCitations(data.citations || []); // Auto-show citations for latest message
+        setActiveCitations(data.citations || []);
       } else {
         setMessages((prev) => [...prev, { text: "Error: Unable to get response.", sender: 'bot' }]);
       }
@@ -81,93 +80,119 @@ function App() {
     }
   };
 
-  const handleMessageClick = (msg: Message) => {
-    if (msg.sender === 'bot' && msg.citations) {
-      setActiveCitations(msg.citations);
-    }
-  };
-
   return (
-    <Box sx={{ display: 'flex', height: '100vh', bgcolor: '#f3f4f6' }}>
-      {/* Left Sidebar (Uploads) */}
-      <Sidebar onFileUpload={handleFileUpload} uploadedFiles={files} isUploading={isUploading} />
-
-      {/* Center Chat Area */}
-      <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', height: '100vh', position: 'relative' }}>
-        <Box sx={{ flexGrow: 1, p: 3, overflowY: 'auto' }}>
-          {messages.length === 0 && (
-            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', flexDirection: 'column', opacity: 0.5 }}>
-              <Typography variant="h4" fontWeight="bold" color="text.secondary">CitaRAG</Typography>
-              <Typography variant="subtitle1" color="text.secondary">Upload a document and start chatting.</Typography>
-            </Box>
-          )}
-
-          {messages.map((msg, idx) => (
-            <Box key={idx} sx={{
-              display: 'flex',
-              justifyContent: msg.sender === 'user' ? 'flex-end' : 'flex-start',
-              mb: 3
-            }}>
-              <Paper
-                onClick={() => handleMessageClick(msg)}
-                elevation={msg.sender === 'user' ? 4 : 1}
-                sx={{
-                  p: 2.5,
-                  borderRadius: msg.sender === 'user' ? '20px 20px 0 20px' : '20px 20px 20px 0',
-                  bgcolor: msg.sender === 'user' ? '#4f46e5' : 'white', // Indigo for user
-                  color: msg.sender === 'user' ? 'white' : '#1f2937',
-                  maxWidth: '75%',
-                  cursor: msg.sender === 'bot' ? 'pointer' : 'default',
-                  transition: 'transform 0.1s',
-                  '&:active': msg.sender === 'bot' ? { transform: 'scale(0.98)' } : {},
-                  boxShadow: msg.sender === 'user'
-                    ? '0 10px 15px -3px rgba(79, 70, 229, 0.3)'
-                    : '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                }}>
-                <Typography sx={{ lineHeight: 1.6, fontSize: '1rem' }}>{msg.text}</Typography>
-              </Paper>
-            </Box>
-          ))}
-          {isChatting && (
-            <Box sx={{ display: 'flex', justifyContent: 'flex-start', mb: 3 }}>
-              <Paper sx={{ p: 2, borderRadius: '20px 20px 20px 0', bgcolor: 'white' }}>
-                <CircularProgress size={20} sx={{ color: '#4f46e5' }} />
-              </Paper>
-            </Box>
-          )}
-        </Box>
-
-        {/* Input Area */}
-        <Box sx={{ p: 3, bgcolor: 'white', borderTop: '1px solid #e5e7eb' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', maxWidth: 900, mx: 'auto', bgcolor: '#f9fafb', borderRadius: 3, px: 2, py: 1, border: '1px solid #e5e7eb' }}>
-            <TextField
-              fullWidth
-              placeholder="Ask a question about your documents..."
-              variant="standard"
-              InputProps={{ disableUnderline: true }}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-              sx={{ mr: 1 }}
-            />
-            <IconButton
-              color="primary"
-              onClick={handleSendMessage}
-              disabled={isChatting || !input.trim()}
-              sx={{
-                bgcolor: input.trim() ? '#4f46e5' : 'transparent',
-                color: input.trim() ? 'white' : 'action.disabled',
-                '&:hover': { bgcolor: '#4338ca' }
-              }}
-            >
-              <SendIcon />
-            </IconButton>
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', bgcolor: 'transparent' }}>
+      {/* Scrollable Chat Area */}
+      <Box sx={{ flexGrow: 1, p: 2, overflowY: 'auto' }}>
+        {messages.length === 0 && (
+          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', flexDirection: 'column', opacity: 0.5 }}>
+            <Typography variant="h6" fontWeight="bold">CitaRAG</Typography>
+            <Typography variant="caption" align="center">Upload documents and ask questions.</Typography>
           </Box>
-        </Box>
+        )}
+
+        {messages.map((msg, idx) => (
+          <Box key={idx} sx={{
+            display: 'flex',
+            justifyContent: msg.sender === 'user' ? 'flex-end' : 'flex-start',
+            mb: 2
+          }}>
+            <Paper
+              onClick={() => msg.citations && setActiveCitations(msg.citations)}
+              elevation={1}
+              sx={{
+                p: 1.5,
+                borderRadius: msg.sender === 'user' ? '12px 12px 0 12px' : '12px 12px 12px 0',
+                bgcolor: msg.sender === 'user' ? '#4f46e5' : 'var(--background-secondary)',
+                color: msg.sender === 'user' ? 'white' : 'var(--text-normal)',
+                maxWidth: '90%',
+                cursor: msg.sender === 'bot' ? 'pointer' : 'default',
+              }}>
+              <Typography sx={{ fontSize: '0.9rem' }}>{msg.text}</Typography>
+            </Paper>
+          </Box>
+        ))}
+        {isChatting && (
+          <Box sx={{ display: 'flex', justifyContent: 'flex-start', mb: 2 }}>
+            <CircularProgress size={16} sx={{ color: '#4f46e5' }} />
+          </Box>
+        )}
       </Box>
 
-      {/* Right Sidebar (Citations) */}
-      <RightSidebar citations={activeCitations} />
+      {/* Citations Panel */}
+      {activeCitations.length > 0 && (
+        <Box sx={{
+          maxHeight: '40%',
+          overflowY: 'auto',
+          borderTop: '2px solid var(--divider-color)',
+          bgcolor: 'var(--background-secondary-alt)',
+          p: 1.5
+        }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1, alignItems: 'center' }}>
+            <Typography variant="caption" sx={{ fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 0.5 }}>Sources</Typography>
+            <Typography
+              variant="caption"
+              sx={{ cursor: 'pointer', color: 'var(--text-accent)', '&:hover': { textDecoration: 'underline' } }}
+              onClick={() => setActiveCitations([])}
+            >
+              Done
+            </Typography>
+          </Box>
+          <CitationList citations={activeCitations} />
+        </Box>
+      )}
+
+      {/* Input Area */}
+      <Box sx={{ p: 1.5, borderTop: '1px solid var(--divider-color)', bgcolor: 'var(--background-primary)' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 1, gap: 1 }}>
+          <Typography variant="caption" sx={{ color: 'var(--text-muted)', flexGrow: 1 }}>
+            Model: <b>Gemini 2.2 Pro</b>
+          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, px: 1, py: 0.2, borderRadius: 5, border: '1px solid var(--divider-color)', bgcolor: 'var(--background-secondary)' }}>
+            <Typography variant="caption" sx={{ fontSize: '0.65rem' }}>Web</Typography>
+            <Box sx={{ width: 14, height: 14, bgcolor: 'var(--text-muted)', borderRadius: '50%', opacity: 0.3 }} />
+          </Box>
+        </Box>
+
+        <Box sx={{
+          display: 'flex',
+          alignItems: 'center',
+          bgcolor: 'var(--background-modifier-form-field)',
+          borderRadius: 2,
+          px: 1.5,
+          border: '1px solid var(--divider-color)',
+          '&:focus-within': { borderColor: '#4f46e5' }
+        }}>
+          <TextField
+            fullWidth
+            placeholder="Ask agent to help you search..."
+            variant="standard"
+            InputProps={{ disableUnderline: true }}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+            sx={{
+              input: { color: 'var(--text-normal)', fontSize: '0.9rem', py: 1.2 }
+            }}
+          />
+          <IconButton
+            size="small"
+            onClick={handleSendMessage}
+            disabled={isChatting || !input.trim()}
+            sx={{
+              bgcolor: input.trim() ? '#4f46e5' : 'transparent',
+              color: input.trim() ? 'white' : 'var(--text-muted)',
+              '&:hover': { bgcolor: '#4338ca' }
+            }}
+          >
+            <SendIcon fontSize="small" />
+          </IconButton>
+        </Box>
+
+        <Box sx={{ mt: 1.5 }}>
+          <UploadSection onFileUpload={handleFileUpload} uploadedFiles={files} isUploading={isUploading} />
+        </Box>
+      </Box>
     </Box>
   );
 }
