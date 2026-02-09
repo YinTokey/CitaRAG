@@ -96,4 +96,16 @@ public class VectorStoreService {
             System.out.println("Stored " + segments.size() + " vectors in Pinecone index: " + indexName);
         }
     }
+
+    public List<dev.langchain4j.store.embedding.EmbeddingMatch<TextSegment>> findRelevant(String queryText,
+            int maxResults) {
+        // Embed the query
+        Embedding queryEmbedding = embeddingModel.embed(queryText).content();
+
+        // Search in Pinecone (using findRelevant which is fine for now, or use search
+        // request builder if available)
+        // LangChain4j 0.3x deprecates simple findRelevant for Request object, but
+        // simpler to stick for now
+        return embeddingStore.findRelevant(queryEmbedding, maxResults);
+    }
 }

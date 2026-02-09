@@ -1,0 +1,10 @@
+{
+    "id": "citarag-obsidian",
+    "name": "CitaRAG",
+    "version": "1.0.0",
+    "minAppVersion": "0.15.0",
+    "description": "RAG Chat Assistant for Obsidian",
+    "author": "CitaRAG Team",
+    "authorUrl": "https://github.com/superegg/CitaRAG",
+    "isDesktopOnly": false
+}
