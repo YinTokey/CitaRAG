@@ -38,46 +38,42 @@ code {
 ::-webkit-scrollbar-thumb {
   background: var(--scrollbar-thumb-bg);
   border-radius: 4px;
-}/* Obsidian Sidebar View Styling */
+}/* Obsidian & UI Polish */
 
-.citarag-view-content {
-  background-color: var(--background-primary);
-  color: var(--text-normal);
-  height: 100%;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
+:root {
+  /* Inherit these from Obsidian, but define defaults for dev */
+  --font-interface: 'Inter', system-ui, sans-serif;
+  --font-monospace: 'JetBrains Mono', monospace;
 }
 
-#citarag-root {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
+body {
+  background-color: transparent !important;
+  /* Let Obsidian theme control bg */
 }
 
-/* MUI Customizations to match Obsidian */
-.MuiPaper-root {
-  background-color: var(--background-secondary) !important;
-  color: var(--text-normal) !important;
-}
+/* MUI Overrides for Obsidian Consistency */
 
-.MuiTypography-root {
-  color: var(--text-normal) !important;
-}
-
-.MuiIconButton-root {
+/* Text Field Placeholder */
+.MuiInputBase-input::placeholder {
   color: var(--text-muted) !important;
+  opacity: 1 !important;
 }
 
-.MuiTextField-root input {
-  color: var(--text-normal) !important;
-}
-
-/* Scrollbar styling */
+/* Scrollbar refinement */
 ::-webkit-scrollbar {
-  width: 4px;
+  width: 5px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--scrollbar-thumb-bg);
+  background: var(--background-modifier-border);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Citations Card */
+.citation-card:hover {
+  border-color: var(--interactive-accent) !important;
 }

@@ -1,6 +1,19 @@
-import { useState } from 'react';
-import { Box, Paper, TextField, IconButton, Typography, CircularProgress } from '@mui/material';
+import { useState, useRef, useEffect } from 'react';
+import { Box, Paper, TextField, IconButton, Typography, CircularProgress, Switch, Button, Collapse, Fade, List, ListItem, ListItemIcon, ListItemText } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
+import CopyAllIcon from '@mui/icons-material/CopyAll';
+import ThumbUpOutlinedIcon from '@mui/icons-material/ThumbUpOutlined';
+import ThumbDownOutlinedIcon from '@mui/icons-material/ThumbDownOutlined';
+import ArticleOutlinedIcon from '@mui/icons-material/ArticleOutlined';
+import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
+import DriveFileRenameOutlineIcon from '@mui/icons-material/DriveFileRenameOutline';
+import KeyboardDoubleArrowRightIcon from '@mui/icons-material/KeyboardDoubleArrowRight';
+import KeyboardDoubleArrowLeftIcon from '@mui/icons-material/KeyboardDoubleArrowLeft';
+import LibraryBooksIcon from '@mui/icons-material/LibraryBooks';
+import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline';
+import PsychologyIcon from '@mui/icons-material/Psychology';
+import FormatQuoteIcon from '@mui/icons-material/FormatQuote';
+
 import UploadSection from './components/UploadSection';
 import CitationList from './components/CitationList';
 import './App.css';
@@ -18,6 +31,18 @@ function App() {
   const [isUploading, setIsUploading] = useState(false);
   const [isChatting, setIsChatting] = useState(false);
   const [activeCitations, setActiveCitations] = useState<any[]>([]);
+  const [isWebSearch, setIsWebSearch] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  const messagesEndRef = useRef<null | HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
 
   const handleFileUpload = async (file: File) => {
     setIsUploading(true);
@@ -31,7 +56,6 @@ function App() {
       });
 
       if (response.ok) {
-        console.log('File uploaded successfully');
         setFiles((prev) => [...prev, file]);
       } else {
         console.error('File upload failed');
@@ -57,7 +81,7 @@ function App() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ query: userMsg.text }),
+        body: JSON.stringify({ query: userMsg.text, web_search: isWebSearch }),
       });
 
       if (response.ok) {
@@ -68,7 +92,6 @@ function App() {
           citations: data.citations
         };
         setMessages((prev) => [...prev, botMsg]);
-        setActiveCitations(data.citations || []);
       } else {
         setMessages((prev) => [...prev, { text: "Error: Unable to get response.", sender: 'bot' }]);
       }
@@ -80,119 +103,329 @@ function App() {
     }
   };
 
+  const handleNewChat = () => {
+    setMessages([]);
+    setInput('');
+    setActiveCitations([]);
+  };
+
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', bgcolor: 'transparent' }}>
-      {/* Scrollable Chat Area */}
-      <Box sx={{ flexGrow: 1, p: 2, overflowY: 'auto' }}>
-        {messages.length === 0 && (
-          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', flexDirection: 'column', opacity: 0.5 }}>
-            <Typography variant="h6" fontWeight="bold">CitaRAG</Typography>
-            <Typography variant="caption" align="center">Upload documents and ask questions.</Typography>
-          </Box>
-        )}
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', bgcolor: 'transparent', position: 'relative', overflow: 'hidden' }}>
 
-        {messages.map((msg, idx) => (
-          <Box key={idx} sx={{
-            display: 'flex',
-            justifyContent: msg.sender === 'user' ? 'flex-end' : 'flex-start',
-            mb: 2
-          }}>
-            <Paper
-              onClick={() => msg.citations && setActiveCitations(msg.citations)}
-              elevation={1}
-              sx={{
-                p: 1.5,
-                borderRadius: msg.sender === 'user' ? '12px 12px 0 12px' : '12px 12px 12px 0',
-                bgcolor: msg.sender === 'user' ? '#4f46e5' : 'var(--background-secondary)',
-                color: msg.sender === 'user' ? 'white' : 'var(--text-normal)',
-                maxWidth: '90%',
-                cursor: msg.sender === 'bot' ? 'pointer' : 'default',
+      {/* HEADER: Top Right Buttons */}
+      <Box sx={{
+        position: 'absolute',
+        top: 10,
+        right: 10,
+        zIndex: 5,
+        display: 'flex',
+        gap: 1
+      }}>
+        <IconButton
+          size="small"
+          onClick={handleNewChat}
+          sx={{
+            bgcolor: '#6366f1',
+            color: 'white',
+            borderRadius: 2,
+            '&:hover': { bgcolor: '#4f46e5' }
+          }}
+        >
+          <DriveFileRenameOutlineIcon fontSize="small" />
+        </IconButton>
+        <IconButton
+          size="small"
+          onClick={() => setIsSettingsOpen(true)}
+          sx={{
+            bgcolor: 'var(--background-modifier-form-field)',
+            color: 'var(--text-muted)',
+            borderRadius: 2,
+            '&:hover': { bgcolor: 'var(--background-modifier-hover)' }
+          }}
+        >
+          <KeyboardDoubleArrowRightIcon fontSize="small" />
+        </IconButton>
+      </Box>
+
+      {/* MAIN VIEW: Chat & Input */}
+      <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', pointerEvents: isSettingsOpen ? 'none' : 'auto', opacity: isSettingsOpen ? 0 : 1, transition: 'opacity 0.2s' }}>
+        {/* 1. Scrollable Chat Area */}
+        <Box sx={{ flexGrow: 1, p: 2, overflowY: 'auto', pb: 20, pt: 6 }}>
+          {messages.length === 0 && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', flexDirection: 'column', opacity: 0.6 }}>
+              <Box sx={{ mb: 2, p: 2, borderRadius: '50%', bgcolor: 'var(--background-modifier-form-field)' }}>
+                <ArticleOutlinedIcon sx={{ fontSize: 40, color: 'var(--text-accent)' }} />
+              </Box>
+              <Typography variant="h6" fontWeight="bold">CitaRAG</Typography>
+              <Typography variant="caption" align="center" color="text.secondary">Your research assistant</Typography>
+            </Box>
+          )}
+
+          {messages.map((msg, idx) => (
+            <Box key={idx} sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: msg.sender === 'user' ? 'flex-end' : 'flex-start',
+              mb: 3
+            }}>
+              {/* Message Bubble */}
+              <Typography variant="body1" sx={{
+                whiteSpace: 'pre-wrap',
+                color: 'var(--text-normal)',
+                fontSize: '0.95rem',
+                lineHeight: 1.6,
+                fontWeight: msg.sender === 'user' ? 400 : 400,
+                maxWidth: '100%',
+                mb: 1
               }}>
-              <Typography sx={{ fontSize: '0.9rem' }}>{msg.text}</Typography>
-            </Paper>
+                {msg.text}
+              </Typography>
+
+              {/* Citations & Actions Row (Bot Only) */}
+              {msg.sender === 'bot' && (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%' }}>
+                  {msg.citations && msg.citations.length > 0 && (
+                    <Button
+                      startIcon={<ArticleOutlinedIcon sx={{ fontSize: 16 }} />}
+                      size="small"
+                      onClick={() => setActiveCitations(activeCitations === msg.citations ? [] : msg.citations!)}
+                      sx={{
+                        textTransform: 'none',
+                        color: 'var(--text-accent)',
+                        bgcolor: 'var(--background-primary-alt)',
+                        fontSize: '0.75rem',
+                        py: 0.2,
+                        px: 1,
+                        borderRadius: 4,
+                        minWidth: 0,
+                        '&:hover': { bgcolor: 'var(--background-modifier-hover)' }
+                      }}
+                    >
+                      {msg.citations.length} source{msg.citations.length !== 1 ? 's' : ''}
+                    </Button>
+                  )}
+
+                  <Box sx={{ flexGrow: 1 }} />
+
+                  {/* Action Buttons */}
+                  <Box sx={{ display: 'flex', gap: 1 }}>
+                    <IconButton size="small" sx={{ p: 0.5, color: 'var(--text-muted)' }} onClick={() => navigator.clipboard.writeText(msg.text)}>
+                      <CopyAllIcon sx={{ fontSize: 16 }} />
+                    </IconButton>
+                    <IconButton size="small" sx={{ p: 0.5, color: 'var(--text-muted)' }}>
+                      <ThumbUpOutlinedIcon sx={{ fontSize: 16 }} />
+                    </IconButton>
+                    <IconButton size="small" sx={{ p: 0.5, color: 'var(--text-muted)' }}>
+                      <ThumbDownOutlinedIcon sx={{ fontSize: 16 }} />
+                    </IconButton>
+                  </Box>
+                </Box>
+              )}
+            </Box>
+          ))}
+
+          {isChatting && (
+            <Box sx={{ display: 'flex', mb: 3 }}>
+              <CircularProgress size={16} sx={{ color: 'var(--text-accent)' }} />
+            </Box>
+          )}
+          <div ref={messagesEndRef} />
+        </Box>
+
+        {/* 2. Floating Input Card Area */}
+        <Box sx={{
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          p: 2,
+          background: 'linear-gradient(to top, var(--background-primary) 80%, transparent)'
+        }}>
+
+          {/* Citations Overlay (Stacks above input) */}
+          <Collapse in={activeCitations.length > 0}>
+            <Box sx={{
+              mb: 2,
+              maxHeight: '30vh',
+              overflowY: 'auto',
+              bgcolor: 'var(--background-secondary)',
+              borderRadius: 3,
+              p: 1.5,
+              border: '1px solid var(--background-modifier-border)'
+            }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                <Typography variant="caption" fontWeight="bold">Sources</Typography>
+                <Typography variant="caption" sx={{ cursor: 'pointer', color: 'var(--text-accent)' }} onClick={() => setActiveCitations([])}>Close</Typography>
+              </Box>
+              <CitationList citations={activeCitations} />
+            </Box>
+          </Collapse>
+
+          {/* Card Container */}
+          <Paper elevation={3} sx={{
+            p: 0,
+            borderRadius: 4,
+            border: '1px solid var(--background-modifier-border)',
+            bgcolor: 'var(--background-primary)',
+            overflow: 'hidden'
+          }}>
+            <Box sx={{ p: 1.5 }}>
+              <TextField
+                fullWidth
+                multiline
+                maxRows={4}
+                placeholder="Ask agent to help you search information..."
+                variant="standard"
+                InputProps={{ disableUnderline: true }}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage();
+                  }
+                }}
+                sx={{
+                  '& .MuiInputBase-input': {
+                    fontSize: '0.95rem',
+                    lineHeight: 1.5,
+                    color: 'var(--text-normal)'
+                  }
+                }}
+              />
+            </Box>
+
+            {/* Footer inside card */}
+            <Box sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              px: 1.5,
+              pb: 1.5,
+              pt: 0.5
+            }}>
+              {/* Left: Toggles */}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <Switch
+                    size="small"
+                    checked={isWebSearch}
+                    onChange={(e) => setIsWebSearch(e.target.checked)}
+                    sx={{
+                      '& .MuiSwitch-switchBase.Mui-checked': { color: 'var(--text-accent)' },
+                      '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { backgroundColor: 'var(--text-accent)' }
+                    }}
+                  />
+                  <Typography variant="caption" color="text.secondary">Web</Typography>
+                </Box>
+
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    bgcolor: 'var(--background-modifier-form-field)',
+                    borderRadius: 1,
+                    px: 1,
+                    py: 0.5,
+                    cursor: 'pointer'
+                  }}
+                >
+                  <Typography variant="caption" sx={{ fontSize: '0.75rem', fontWeight: 600 }}>Gemini 1.5 Pro</Typography>
+                </Box>
+              </Box>
+
+              {/* Right: Send Button */}
+              <IconButton
+                size="small"
+                onClick={handleSendMessage}
+                disabled={isChatting || !input.trim()}
+                sx={{
+                  bgcolor: input.trim() ? 'var(--interactive-accent)' : 'var(--background-modifier-form-field)',
+                  color: input.trim() ? 'white' : 'var(--text-muted)',
+                  width: 32,
+                  height: 32,
+                  '&:hover': { bgcolor: 'var(--interactive-accent-hover)' }
+                }}
+              >
+                <ArrowUpwardIcon fontSize="small" />
+              </IconButton>
+            </Box>
+          </Paper>
+
+          {/* Helper text/links under card */}
+          <Box sx={{ display: 'flex', justifyContent: 'center', mt: 1 }}>
+            <UploadSection onFileUpload={handleFileUpload} uploadedFiles={files} isUploading={isUploading} />
           </Box>
-        ))}
-        {isChatting && (
-          <Box sx={{ display: 'flex', justifyContent: 'flex-start', mb: 2 }}>
-            <CircularProgress size={16} sx={{ color: '#4f46e5' }} />
-          </Box>
-        )}
+        </Box>
       </Box>
 
-      {/* Citations Panel */}
-      {activeCitations.length > 0 && (
+      {/* SETTINGS / MENU VIEW (Overlay) */}
+      <Fade in={isSettingsOpen}>
         <Box sx={{
-          maxHeight: '40%',
-          overflowY: 'auto',
-          borderTop: '2px solid var(--divider-color)',
-          bgcolor: 'var(--background-secondary-alt)',
-          p: 1.5
-        }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1, alignItems: 'center' }}>
-            <Typography variant="caption" sx={{ fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 0.5 }}>Sources</Typography>
-            <Typography
-              variant="caption"
-              sx={{ cursor: 'pointer', color: 'var(--text-accent)', '&:hover': { textDecoration: 'underline' } }}
-              onClick={() => setActiveCitations([])}
-            >
-              Done
-            </Typography>
-          </Box>
-          <CitationList citations={activeCitations} />
-        </Box>
-      )}
-
-      {/* Input Area */}
-      <Box sx={{ p: 1.5, borderTop: '1px solid var(--divider-color)', bgcolor: 'var(--background-primary)' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 1, gap: 1 }}>
-          <Typography variant="caption" sx={{ color: 'var(--text-muted)', flexGrow: 1 }}>
-            Model: <b>Gemini 2.2 Pro</b>
-          </Typography>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, px: 1, py: 0.2, borderRadius: 5, border: '1px solid var(--divider-color)', bgcolor: 'var(--background-secondary)' }}>
-            <Typography variant="caption" sx={{ fontSize: '0.65rem' }}>Web</Typography>
-            <Box sx={{ width: 14, height: 14, bgcolor: 'var(--text-muted)', borderRadius: '50%', opacity: 0.3 }} />
-          </Box>
-        </Box>
-
-        <Box sx={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          bgcolor: 'var(--background-primary)',
+          zIndex: 10,
+          p: 2,
           display: 'flex',
-          alignItems: 'center',
-          bgcolor: 'var(--background-modifier-form-field)',
-          borderRadius: 2,
-          px: 1.5,
-          border: '1px solid var(--divider-color)',
-          '&:focus-within': { borderColor: '#4f46e5' }
+          flexDirection: 'column'
         }}>
-          <TextField
-            fullWidth
-            placeholder="Ask agent to help you search..."
-            variant="standard"
-            InputProps={{ disableUnderline: true }}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-            sx={{
-              input: { color: 'var(--text-normal)', fontSize: '0.9rem', py: 1.2 }
-            }}
-          />
-          <IconButton
-            size="small"
-            onClick={handleSendMessage}
-            disabled={isChatting || !input.trim()}
-            sx={{
-              bgcolor: input.trim() ? '#4f46e5' : 'transparent',
-              color: input.trim() ? 'white' : 'var(--text-muted)',
-              '&:hover': { bgcolor: '#4338ca' }
-            }}
-          >
-            <SendIcon fontSize="small" />
-          </IconButton>
-        </Box>
+          {/* Menu Header */}
+          <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+            <IconButton
+              size="small"
+              onClick={() => setIsSettingsOpen(false)}
+              sx={{
+                bgcolor: 'var(--background-modifier-form-field)',
+                color: 'var(--text-muted)',
+                borderRadius: 2,
+                mr: 2,
+                '&:hover': { bgcolor: 'var(--background-modifier-hover)' }
+              }}
+            >
+              <KeyboardDoubleArrowLeftIcon fontSize="small" />
+            </IconButton>
+          </Box>
 
-        <Box sx={{ mt: 1.5 }}>
-          <UploadSection onFileUpload={handleFileUpload} uploadedFiles={files} isUploading={isUploading} />
+          {/* Menu Items */}
+          <List sx={{ width: '100%', bgcolor: 'transparent' }}>
+
+            <ListItem disablePadding sx={{ mb: 1, borderRadius: 2, '&:hover': { bgcolor: 'var(--background-modifier-hover)' } }}>
+              <ListItemIcon sx={{ minWidth: 40 }}>
+                <LibraryBooksIcon sx={{ color: 'var(--text-normal)' }} />
+              </ListItemIcon>
+              <ListItemText primary="Library" primaryTypographyProps={{ color: 'text.primary', fontWeight: 500 }} />
+            </ListItem>
+
+            <ListItem disablePadding sx={{ mb: 1, borderRadius: 2, '&:hover': { bgcolor: 'var(--background-modifier-hover)' } }}>
+              <ListItemIcon sx={{ minWidth: 40 }}>
+                <ChatBubbleOutlineIcon sx={{ color: 'var(--text-normal)' }} />
+              </ListItemIcon>
+              <ListItemText primary="AI Chat" primaryTypographyProps={{ color: 'text.primary', fontWeight: 500 }} />
+            </ListItem>
+
+            <ListItem disablePadding sx={{ mb: 1, borderRadius: 2, '&:hover': { bgcolor: 'var(--background-modifier-hover)' } }}>
+              <ListItemIcon sx={{ minWidth: 40 }}>
+                <PsychologyIcon sx={{ color: 'var(--text-normal)' }} />
+              </ListItemIcon>
+              <ListItemText primary="models" primaryTypographyProps={{ color: 'text.primary', fontWeight: 500 }} />
+            </ListItem>
+
+            <ListItem disablePadding sx={{ mb: 1, borderRadius: 2, '&:hover': { bgcolor: 'var(--background-modifier-hover)' } }}>
+              <ListItemIcon sx={{ minWidth: 40 }}>
+                <FormatQuoteIcon sx={{ color: 'var(--text-normal)' }} />
+              </ListItemIcon>
+              <ListItemText primary="Citation Style" primaryTypographyProps={{ color: 'text.primary', fontWeight: 500 }} />
+            </ListItem>
+
+          </List>
+
         </Box>
-      </Box>
+      </Fade>
+
     </Box>
   );
 }
