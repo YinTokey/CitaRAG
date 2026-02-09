@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
 import { Box, Paper, TextField, IconButton, Typography, CircularProgress, Switch, Button, Collapse, Fade, List, ListItem, ListItemIcon, ListItemText } from '@mui/material';
-import SendIcon from '@mui/icons-material/Send';
 import CopyAllIcon from '@mui/icons-material/CopyAll';
 import ThumbUpOutlinedIcon from '@mui/icons-material/ThumbUpOutlined';
 import ThumbDownOutlinedIcon from '@mui/icons-material/ThumbDownOutlined';
@@ -14,8 +13,8 @@ import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline';
 import PsychologyIcon from '@mui/icons-material/Psychology';
 import FormatQuoteIcon from '@mui/icons-material/FormatQuote';
 
-import UploadSection from './components/UploadSection';
 import CitationList from './components/CitationList';
+import LibraryView from './components/LibraryView';
 import './App.css';
 
 interface Message {
@@ -23,6 +22,8 @@ interface Message {
   sender: 'user' | 'bot';
   citations?: any[];
 }
+
+type ViewState = 'chat' | 'menu' | 'library';
 
 function App() {
   const [files, setFiles] = useState<File[]>([]);
@@ -32,7 +33,9 @@ function App() {
   const [isChatting, setIsChatting] = useState(false);
   const [activeCitations, setActiveCitations] = useState<any[]>([]);
   const [isWebSearch, setIsWebSearch] = useState(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  // Navigation State
+  const [currentView, setCurrentView] = useState<ViewState>('chat');
 
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
 
@@ -112,43 +115,54 @@ function App() {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', bgcolor: 'transparent', position: 'relative', overflow: 'hidden' }}>
 
-      {/* HEADER: Top Right Buttons */}
-      <Box sx={{
-        position: 'absolute',
-        top: 10,
-        right: 10,
-        zIndex: 5,
-        display: 'flex',
-        gap: 1
-      }}>
-        <IconButton
-          size="small"
-          onClick={handleNewChat}
-          sx={{
-            bgcolor: '#6366f1',
-            color: 'white',
-            borderRadius: 2,
-            '&:hover': { bgcolor: '#4f46e5' }
-          }}
-        >
-          <DriveFileRenameOutlineIcon fontSize="small" />
-        </IconButton>
-        <IconButton
-          size="small"
-          onClick={() => setIsSettingsOpen(true)}
-          sx={{
-            bgcolor: 'var(--background-modifier-form-field)',
-            color: 'var(--text-muted)',
-            borderRadius: 2,
-            '&:hover': { bgcolor: 'var(--background-modifier-hover)' }
-          }}
-        >
-          <KeyboardDoubleArrowRightIcon fontSize="small" />
-        </IconButton>
-      </Box>
+      {/* HEADER: Top Right Buttons (Only show in Chat view) */}
+      {currentView === 'chat' && (
+        <Box sx={{
+          position: 'absolute',
+          top: 10,
+          right: 10,
+          zIndex: 5,
+          display: 'flex',
+          gap: 1
+        }}>
+          <IconButton
+            size="small"
+            onClick={handleNewChat}
+            sx={{
+              bgcolor: '#6366f1',
+              color: 'white',
+              borderRadius: 2,
+              '&:hover': { bgcolor: '#4f46e5' }
+            }}
+          >
+            <DriveFileRenameOutlineIcon fontSize="small" />
+          </IconButton>
+          <IconButton
+            size="small"
+            onClick={() => setCurrentView('menu')}
+            sx={{
+              bgcolor: 'var(--background-modifier-form-field)',
+              color: 'var(--text-muted)',
+              borderRadius: 2,
+              '&:hover': { bgcolor: 'var(--background-modifier-hover)' }
+            }}
+          >
+            <KeyboardDoubleArrowRightIcon fontSize="small" />
+          </IconButton>
+        </Box>
+      )}
 
       {/* MAIN VIEW: Chat & Input */}
-      <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', pointerEvents: isSettingsOpen ? 'none' : 'auto', opacity: isSettingsOpen ? 0 : 1, transition: 'opacity 0.2s' }}>
+      <Box sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        // Fade out / disable when menu or library is open
+        opacity: currentView === 'chat' ? 1 : 0,
+        pointerEvents: currentView === 'chat' ? 'auto' : 'none',
+        transition: 'opacity 0.2s',
+        visibility: currentView === 'chat' ? 'visible' : 'hidden'
+      }}>
         {/* 1. Scrollable Chat Area */}
         <Box sx={{ flexGrow: 1, p: 2, overflowY: 'auto', pb: 20, pt: 6 }}>
           {messages.length === 0 && (
@@ -352,15 +366,12 @@ function App() {
             </Box>
           </Paper>
 
-          {/* Helper text/links under card */}
-          <Box sx={{ display: 'flex', justifyContent: 'center', mt: 1 }}>
-            <UploadSection onFileUpload={handleFileUpload} uploadedFiles={files} isUploading={isUploading} />
-          </Box>
+          {/* REMOVED OLD UPLOAD SECTION */}
         </Box>
       </Box>
 
       {/* SETTINGS / MENU VIEW (Overlay) */}
-      <Fade in={isSettingsOpen}>
+      <Fade in={currentView === 'menu'}>
         <Box sx={{
           position: 'absolute',
           top: 0,
@@ -377,7 +388,7 @@ function App() {
           <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
             <IconButton
               size="small"
-              onClick={() => setIsSettingsOpen(false)}
+              onClick={() => setCurrentView('chat')}
               sx={{
                 bgcolor: 'var(--background-modifier-form-field)',
                 color: 'var(--text-muted)',
@@ -393,7 +404,11 @@ function App() {
           {/* Menu Items */}
           <List sx={{ width: '100%', bgcolor: 'transparent' }}>
 
-            <ListItem disablePadding sx={{ mb: 1, borderRadius: 2, '&:hover': { bgcolor: 'var(--background-modifier-hover)' } }}>
+            <ListItem
+              disablePadding
+              onClick={() => setCurrentView('library')}
+              sx={{ mb: 1, borderRadius: 2, cursor: 'pointer', '&:hover': { bgcolor: 'var(--background-modifier-hover)' } }}
+            >
               <ListItemIcon sx={{ minWidth: 40 }}>
                 <LibraryBooksIcon sx={{ color: 'var(--text-normal)' }} />
               </ListItemIcon>
@@ -423,6 +438,25 @@ function App() {
 
           </List>
 
+        </Box>
+      </Fade>
+
+      {/* LIBRARY VIEW (Full Overlay) */}
+      <Fade in={currentView === 'library'}>
+        <Box sx={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          bgcolor: 'var(--background-primary)',
+          zIndex: 20
+        }}>
+          <LibraryView
+            files={files}
+            onUpload={handleFileUpload}
+            onBack={() => setCurrentView('menu')}
+          />
         </Box>
       </Fade>
 

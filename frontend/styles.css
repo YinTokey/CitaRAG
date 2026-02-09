@@ -42,8 +42,14 @@ code {
 
 :root {
   /* Inherit these from Obsidian, but define defaults for dev */
-  --font-interface: 'Inter', system-ui, sans-serif;
+  --font-interface: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   --font-monospace: 'JetBrains Mono', monospace;
+
+  /* Refined Palette */
+  --color-accent: #6366f1;
+  --color-accent-hover: #4f46e5;
+  --bg-subtle: rgba(140, 140, 140, 0.05);
+  /* Very subtle overlay for hovers */
 }
 
 body {
@@ -52,11 +58,14 @@ body {
 }
 
 /* MUI Overrides for Obsidian Consistency */
+.MuiTypography-root {
+  font-family: var(--font-interface) !important;
+}
 
 /* Text Field Placeholder */
 .MuiInputBase-input::placeholder {
   color: var(--text-muted) !important;
-  opacity: 1 !important;
+  opacity: 0.7 !important;
 }
 
 /* Scrollbar refinement */
@@ -65,7 +74,7 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--background-modifier-border);
+  background-color: var(--background-modifier-border);
   border-radius: 10px;
 }
 
@@ -73,7 +82,106 @@ body {
   background: transparent;
 }
 
-/* Citations Card */
-.citation-card:hover {
-  border-color: var(--interactive-accent) !important;
+/* Library View Styles */
+.library-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: var(--background-primary);
+}
+
+.library-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 60%;
+  /* Visual balance */
+  opacity: 1;
+  text-align: center;
+}
+
+.empty-state-icon-circle {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background-color: var(--background-modifier-form-field);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+
+/* Upload Drop Zone - Premium Feel */
+.upload-drop-zone {
+  border: 2px dashed var(--background-modifier-border);
+  border-radius: 16px;
+  padding: 48px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  background-color: var(--background-primary);
+}
+
+.upload-drop-zone:hover {
+  border-color: var(--color-accent);
+  background-color: var(--bg-subtle);
+  transform: translateY(-1px);
+}
+
+/* Search Input Polish */
+.library-search-input .MuiOutlinedInput-root {
+  background-color: var(--background-modifier-form-field);
+  border-radius: 12px;
+  transition: box-shadow 0.2s;
+}
+
+.library-search-input .MuiOutlinedInput-notchedOutline {
+  border-color: transparent;
+}
+
+.library-search-input .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline {
+  border-color: var(--color-accent);
+  border-width: 1px;
+}
+
+.library-search-input:hover .MuiOutlinedInput-notchedOutline {
+  border-color: var(--background-modifier-border-hover);
+}
+
+/* File List Item Polish */
+.file-list-item {
+  transition: background-color 0.15s ease;
+  border-radius: 8px;
+  padding: 8px;
+}
+
+.file-list-item:hover {
+  background-color: var(--bg-subtle);
+}
+
+/* Tabs Polish */
+.clean-tabs .MuiTabs-indicator {
+  background-color: var(--text-normal) !important;
+  height: 2px;
+  border-radius: 2px;
+}
+
+.clean-tabs .MuiTab-root {
+  text-transform: none;
+  font-weight: 500;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  min-width: auto;
+  margin-right: 16px;
+  padding: 0;
+  padding-bottom: 4px;
+}
+
+.clean-tabs .Mui-selected {
+  color: var(--text-normal) !important;
 }
