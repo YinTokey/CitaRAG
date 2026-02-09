@@ -47,7 +47,6 @@ body {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background-color: var(--background-primary);
 }
 
 .library-empty-state {
@@ -124,11 +123,17 @@ body {
   background-color: var(--bg-subtle);
 }
 
-/* Tabs Polish */
+/* Tabs Polish - Pill Style */
+.clean-tabs {
+  min-height: auto !important;
+}
+
 .clean-tabs .MuiTabs-indicator {
-  background-color: var(--text-normal) !important;
-  height: 2px;
-  border-radius: 2px;
+  display: none !important;
+}
+
+.clean-tabs .MuiTabs-flexContainer {
+  gap: 4px;
 }
 
 .clean-tabs .MuiTab-root {
@@ -137,11 +142,14 @@ body {
   font-size: 0.9rem;
   color: var(--text-muted);
   min-width: auto;
-  margin-right: 16px;
-  padding: 0;
-  padding-bottom: 4px;
+  min-height: auto !important;
+  padding: 6px 16px !important;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  margin-right: 0 !important;
 }
 
 .clean-tabs .Mui-selected {
   color: var(--text-normal) !important;
+  background-color: var(--background-modifier-form-field) !important;
 }
