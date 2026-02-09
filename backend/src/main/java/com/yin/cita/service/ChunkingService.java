@@ -220,14 +220,19 @@ public class ChunkingService {
 
         List<java.util.concurrent.CompletableFuture<Void>> futures = chunks.stream()
                 .map(chunk -> java.util.concurrent.CompletableFuture.runAsync(() -> {
-                    String text = (String) chunk.get("text");
-                    boolean isTable = (boolean) chunk.get("_isTable");
+                    // Temporarily commenting out unused variables while enrichment is disabled to
+                    // avoid lints
+                    // String text = (String) chunk.get("text");
+                    // boolean isTable = (boolean) chunk.get("_isTable");
                     String pageNum = (String) chunk.get("_pageNum");
                     String sectionHeader = (String) chunk.get("_sectionHeader");
 
                     ChunkMetadata enrichment = null;
                     try {
-                        enrichment = enrichmentService.enrichChunk(text, isTable);
+                        // AI Enrichment is currently disabled. To re-enable: uncomment variables above
+                        // and enrichment call below.
+                        // enrichment = enrichmentService.enrichChunk(text, isTable);
+                        enrichment = new ChunkMetadata();
                     } catch (Exception e) {
                         System.err.println("Enrichment failed: " + e.getMessage());
                     }
@@ -250,8 +255,7 @@ public class ChunkingService {
                     chunk.remove("_isTable");
                     chunk.remove("_pageNum");
                     chunk.remove("_sectionHeader");
-                }))
-                .collect(Collectors.toList());
+                })).collect(Collectors.toList());
 
         // Wait for all to complete
         java.util.concurrent.CompletableFuture.allOf(futures.toArray(new java.util.concurrent.CompletableFuture[0]))

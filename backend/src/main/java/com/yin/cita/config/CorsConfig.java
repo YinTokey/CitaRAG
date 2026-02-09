@@ -10,8 +10,8 @@ public class CorsConfig implements WebMvcConfigurer {
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {
-        registry.addMapping("/**") // Allow all origins for now
-                .allowedOrigins("http://localhost:5173") // Allow frontend usually running on 5173
+        registry.addMapping("/**")
+                .allowedOrigins("http://localhost:5173", "app://obsidian.md")
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS")
                 .allowCredentials(true);
     }
