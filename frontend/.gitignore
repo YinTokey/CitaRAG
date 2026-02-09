@@ -22,3 +22,12 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Build output
+main.js
+main.css
+dist/
+build/
+
+# os
+.DS_Store
