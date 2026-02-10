@@ -15,6 +15,7 @@ import KeyboardDoubleArrowLeftIcon from '@mui/icons-material/KeyboardDoubleArrow
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 import CitationList from './components/CitationList';
 import LibraryView from './components/LibraryView';
@@ -107,53 +108,64 @@ function App() {
       let botMsg: Message = { text: '', sender: 'bot', citations: [] };
       setMessages((prev) => [...prev, botMsg]);
 
+      let buffer = '';
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split('\n');
+        buffer += decoder.decode(value, { stream: true });
 
-        for (const line of lines) {
-          if (line.startsWith('data:')) {
-            const data = line.slice(5);
-            // if (!data) continue; // Removed to allow empty signals if any, but mainly to avoid trimming spaces
+        // Split by double newline which separates SSE events
+        const parts = buffer.split('\n\n');
+        buffer = parts.pop() || ''; // Keep the last incomplete part in the buffer
 
-            try {
-              if (data.startsWith('{') || data.startsWith('[')) {
-                try {
-                  const event = JSON.parse(data);
-                  if (event.type === 'citations') {
-                    botMsg.citations = event.data;
-                    setMessages((prev) => {
-                      const newMessages = [...prev];
-                      newMessages[newMessages.length - 1] = { ...botMsg };
-                      return newMessages;
-                    });
-                    continue;
-                  }
-                } catch (e) {
-                  // Not JSON, treat as text
-                }
-              }
+        for (const part of parts) {
+          const lines = part.split('\n');
+          let eventData = '';
+          let eventType = 'message';
 
-              // Assume token if not special event
-              if (data) {
-                botMsg.text += data;
-                setMessages((prev) => {
-                  const newMessages = [...prev];
-                  newMessages[newMessages.length - 1] = { ...botMsg };
-                  return newMessages;
-                });
-              }
-            } catch (e) {
-              botMsg.text += data;
-              setMessages((prev) => {
-                const newMessages = [...prev];
-                newMessages[newMessages.length - 1] = { ...botMsg };
-                return newMessages;
-              });
+          for (const line of lines) {
+            if (line.startsWith('event:')) {
+              eventType = line.slice(6).trim();
+            } else if (line.startsWith('data:')) {
+              // Append data line with newline if there's already data (per SSE spec)
+              // This is crucial for preserving newlines sent by the backend
+              eventData += (eventData ? '\n' : '') + line.slice(5);
             }
+          }
+
+          if (!eventData && eventType === 'message') continue;
+
+          try {
+            // Check if it's our JSON event (citations)
+            if (eventData.startsWith('{') || eventData.startsWith('[')) {
+              try {
+                const event = JSON.parse(eventData);
+                if (event.type === 'citations') {
+                  botMsg.citations = event.data;
+                  setMessages((prev) => {
+                    const newMessages = [...prev];
+                    newMessages[newMessages.length - 1] = { ...botMsg };
+                    return newMessages;
+                  });
+                  continue;
+                }
+              } catch (e) {
+                // Not valid JSON, process as text
+              }
+            }
+
+            // Standard token or text
+            botMsg.text += eventData;
+            setMessages((prev) => {
+              const newMessages = [...prev];
+              newMessages[newMessages.length - 1] = { ...botMsg };
+              return newMessages;
+            });
+          } catch (e) {
+            console.error("Error processing event", e, eventData);
+            // Fallback: just append as is
+            botMsg.text += eventData;
           }
         }
       }
@@ -334,32 +346,46 @@ function App() {
               alignItems: msg.sender === 'user' ? 'flex-end' : 'flex-start',
               mb: 3
             }}>
-              {/* Message Bubble */}
+              {/* Message Bubble/Text */}
               <Box sx={{
-                p: 1.5,
-                borderRadius: msg.sender === 'user' ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
-                bgcolor: msg.sender === 'user' ? '#6366f1' : 'var(--background-secondary)',
+                p: msg.sender === 'user' ? 1.5 : 0,
+                borderRadius: msg.sender === 'user' ? '18px 18px 4px 18px' : 0,
+                bgcolor: msg.sender === 'user' ? '#6366f1' : 'transparent',
                 color: msg.sender === 'user' ? 'white' : 'var(--text-normal)',
                 maxWidth: '85%',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
-                mb: 1
+                boxShadow: msg.sender === 'user' ? '0 2px 4px rgba(0,0,0,0.05)' : 'none',
+                mb: 1,
+                userSelect: 'text', // Enable text selection
+                width: msg.sender === 'bot' ? '100%' : 'auto'
               }}>
                 <Box sx={{
                   fontFamily: 'inherit',
-                  '& p': { m: 0, mb: 1.5, lineHeight: 1.6 },
+                  '& p': { m: 0, mb: 2, lineHeight: 1.6 },
                   '& p:last-child': { mb: 0 },
-                  '& ul, & ol': { m: 0, pl: 3, mb: 1.5 },
-                  '& li': { mb: 0.5, lineHeight: 1.6 },
-                  '& li > p': { mb: 0.5 }, /* Handle nested paragraphs in lists */
+                  '& ul, & ol': {
+                    m: 0,
+                    pl: 3,
+                    mb: 2,
+                    '& li': {
+                      display: 'list-item',
+                      listStyleType: 'disc',
+                      mb: 1,
+                      lineHeight: 1.6
+                    }
+                  },
+                  '& li > p': { mb: 0.5 },
                   '& code': { bgcolor: 'rgba(0,0,0,0.06)', px: 0.8, py: 0.2, borderRadius: 1, fontFamily: 'monospace', fontSize: '0.85em' },
-                  '& pre': { bgcolor: '#f5f5f5', p: 1.5, borderRadius: 2, overflowX: 'auto', my: 1.5, border: '1px solid rgba(0,0,0,0.05)', '& code': { bgcolor: 'transparent', p: 0, fontSize: '0.9em' } },
-                  '& h1, & h2, & h3, & h4': { mt: 2, mb: 1, fontWeight: 600 },
+                  '& pre': { bgcolor: '#f5f5f5', p: 1.5, borderRadius: 2, overflowX: 'auto', my: 2, border: '1px solid rgba(0,0,0,0.05)', '& code': { bgcolor: 'transparent', p: 0, fontSize: '0.9em' } },
+                  '& h1, & h2, & h3, & h4': { mt: 3, mb: 1.5, fontWeight: 600, color: 'var(--header-text)' },
                   '& h1': { fontSize: '1.4em' },
                   '& h2': { fontSize: '1.25em' },
                   '& h3': { fontSize: '1.1em' },
-                  '& blockquote': { borderLeft: '4px solid #ddd', m: 0, pl: 2, color: 'text.secondary', my: 1.5 }
+                  '& blockquote': { borderLeft: '4px solid #ddd', m: 0, pl: 2, color: 'text.secondary', my: 2 },
+                  '& table': { borderCollapse: 'collapse', width: '100%', mb: 2 },
+                  '& th, & td': { border: '1px solid #ddd', p: 1, textAlign: 'left' },
+                  '& th': { bgcolor: '#f8f9fa' }
                 }}>
-                  <ReactMarkdown>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
                     {msg.text}
                   </ReactMarkdown>
                 </Box>
