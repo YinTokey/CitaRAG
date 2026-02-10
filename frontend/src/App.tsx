@@ -17,6 +17,8 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import CheckIcon from '@mui/icons-material/Check';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
 
 import CitationList from './components/CitationList';
 import LibraryView from './components/LibraryView';
@@ -40,20 +42,8 @@ const AVAILABLE_MODELS = [
     name: 'Gemma 2 2B',          // ~1.6 GB - good quality/size ratio
   },
   {
-    id: 'phi3:mini',
-    name: 'Phi-3 Mini',          // ~2.2 GB - best reasoning for size
-  },
-  {
-    id: 'qwen2.5:0.5b',
-    name: 'Qwen 2.5 0.5B',       // ~400 MB - absolute smallest
-  },
-  {
     id: 'qwen2.5:1.5b',
     name: 'Qwen 2.5 1.5B',       // ~1 GB - great for the size
-  },
-  {
-    id: 'tinyllama',
-    name: 'TinyLlama 1.1B',      // ~638 MB
   },
 ];
 
@@ -74,6 +64,7 @@ function App() {
   // Model Download State
   const [isDownloadingModel, setIsDownloadingModel] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
+  const [downloadingModelName, setDownloadingModelName] = useState<string>('');
 
   // Navigation State
   const [currentView, setCurrentView] = useState<ViewState>('chat');
@@ -285,6 +276,7 @@ function App() {
         // Pull model
         setIsDownloadingModel(true);
         setDownloadProgress(0);
+        setDownloadingModelName(model.name);
         try {
           const pullResponse = await fetch('http://localhost:8080/api/models/pull', {
             method: 'POST',
@@ -348,6 +340,7 @@ function App() {
         } finally {
           setIsDownloadingModel(false);
           setDownloadProgress(0);
+          setDownloadingModelName('');
         }
       }
     } catch (e) {
@@ -394,7 +387,7 @@ function App() {
               }}>
                 <CircularProgress size={14} thickness={5} />
                 <Typography variant="caption" sx={{ fontWeight: 600, color: 'var(--text-normal)' }}>
-                  Downloading {selectedModel ? selectedModel.name : "Model"}...
+                  Downloading {downloadingModelName || "Model"}...
                 </Typography>
                 <Box sx={{ width: 100, ml: 1 }}>
                   <LinearProgress variant="determinate" value={downloadProgress} sx={{ height: 4, borderRadius: 2 }} />
@@ -548,7 +541,10 @@ function App() {
                   '& th, & td': { border: '1px solid #ddd', p: 1, textAlign: 'left' },
                   '& th': { bgcolor: '#f8f9fa' }
                 }}>
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm, remarkMath]}
+                    rehypePlugins={[rehypeKatex]}
+                  >
                     {msg.text}
                   </ReactMarkdown>
                 </Box>
