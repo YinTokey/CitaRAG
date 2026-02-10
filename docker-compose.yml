@@ -77,6 +77,16 @@ services:
       - "etcd"
       - "minio"
 
+  ollama:
+    build:
+      context: ./ollama
+      dockerfile: Dockerfile
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+
 networks:
   default:
     name: milvus
@@ -86,3 +96,4 @@ volumes:
   etcd_data:
   minio_data:
   milvus_data:
+  ollama_data:

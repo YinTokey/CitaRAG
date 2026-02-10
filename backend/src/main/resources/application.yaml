@@ -8,11 +8,13 @@ langchain4j:
       api-key: ${OPENAI_API_KEY:demo}
       model-name: gpt-5-mini
       temperature: 1.0
+  ollama:
     embedding-model:
-      api-key: ${OPENAI_API_KEY:demo}
-      model-name: text-embedding-3-small
+      base-url: http://localhost:11434
+      model-name: embeddinggemma
+      timeout: 120s
   milvus:
     host: localhost
     port: 19530
     collection-name: citarag
-    dimension: 1536 # text-embedding-3-small default is 1536, but previous code said 512? checking service.
+    dimension: 768 # EmbeddingGemma-300m dimension

@@ -70,6 +70,12 @@
             <version>0.36.2</version>
         </dependency>
 
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-ollama</artifactId>
+            <version>0.36.2</version>
+        </dependency>
+
 
         <dependency>
             <groupId>dev.langchain4j</groupId>

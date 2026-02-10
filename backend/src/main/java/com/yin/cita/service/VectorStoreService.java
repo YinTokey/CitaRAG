@@ -3,7 +3,7 @@ package com.yin.cita.service;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
-import dev.langchain4j.model.openai.OpenAiEmbeddingModel;
+import dev.langchain4j.model.ollama.OllamaEmbeddingModel;
 import dev.langchain4j.store.embedding.EmbeddingStore;
 import dev.langchain4j.store.embedding.milvus.MilvusEmbeddingStore;
 import org.springframework.beans.factory.annotation.Value;
@@ -17,8 +17,14 @@ import java.util.Map;
 @Service
 public class VectorStoreService {
 
-    @Value("${langchain4j.open-ai.embedding-model.api-key}")
-    private String openAiApiKey;
+    @Value("${langchain4j.ollama.embedding-model.base-url}")
+    private String ollamaBaseUrl;
+
+    @Value("${langchain4j.ollama.embedding-model.model-name}")
+    private String ollamaModelName;
+
+    @Value("${langchain4j.ollama.embedding-model.timeout}")
+    private java.time.Duration timeout;
 
     @Value("${langchain4j.milvus.host}")
     private String milvusHost;
@@ -38,11 +44,11 @@ public class VectorStoreService {
     @PostConstruct
     public void init() {
         try {
-            // Initialize Embedding Model (OpenAI text-embedding-3-small)
-            this.embeddingModel = OpenAiEmbeddingModel.builder()
-                    .apiKey(openAiApiKey)
-                    .modelName("text-embedding-3-small")
-                    .dimensions(dimension)
+            // Initialize Embedding Model (Ollama)
+            this.embeddingModel = OllamaEmbeddingModel.builder()
+                    .baseUrl(ollamaBaseUrl)
+                    .modelName(ollamaModelName)
+                    .timeout(timeout)
                     .build();
 
             // Initialize Milvus Store
@@ -63,7 +69,7 @@ public class VectorStoreService {
         if (chunks == null || chunks.isEmpty())
             return;
 
-        List<TextSegment> segments = new ArrayList<>();
+        List<TextSegment> allSegments = new ArrayList<>();
 
         for (Map<String, Object> chunk : chunks) {
             String text = (String) chunk.get("text");
@@ -93,17 +99,44 @@ public class VectorStoreService {
                 }
             }
 
-            segments.add(TextSegment.from(text, metadata));
+            allSegments.add(TextSegment.from(text, metadata));
         }
 
-        if (!segments.isEmpty()) {
-            // Generate Embeddings
-            List<Embedding> embeddings = embeddingModel.embedAll(segments).content();
+        if (!allSegments.isEmpty()) {
+            int batchSize = 10; // Process in batches of 10 to avoid timeouts
+            int totalSegments = allSegments.size();
+            int processed = 0;
 
-            // Store in Milvus
-            embeddingStore.addAll(embeddings, segments);
+            System.out.println("Starting embedding generation for " + totalSegments + " segments...");
 
-            System.out.println("Stored " + segments.size() + " vectors in Milvus collection: " + collectionName);
+            for (int i = 0; i < totalSegments; i += batchSize) {
+                int end = Math.min(i + batchSize, totalSegments);
+                List<TextSegment> batch = allSegments.subList(i, end);
+
+                try {
+                    // Generate Embeddings for batch
+                    List<Embedding> embeddings = embeddingModel.embedAll(batch).content();
+
+                    // Store batch in Milvus
+                    embeddingStore.addAll(embeddings, batch);
+
+                    processed += batch.size();
+                    System.out.println("Processed batch " + (i / batchSize + 1) + "/"
+                            + ((totalSegments + batchSize - 1) / batchSize) +
+                            " (" + processed + "/" + totalSegments + " segments)");
+
+                } catch (Exception e) {
+                    System.err.println("Error processing batch " + (i / batchSize + 1) + ": " + e.getMessage());
+                    // Consider whether to throw or continue. For now, we log and rethrow to stop
+                    // processing causing partial failure state
+                    // or we could continue to try best effort.
+                    // Given the user wants to avoid timeouts, failing fast on a batch is better
+                    // than hanging.
+                    throw new RuntimeException("Failed to process batch of embeddings", e);
+                }
+            }
+
+            System.out.println("Stored " + processed + " vectors in Milvus collection: " + collectionName);
         }
     }
 
