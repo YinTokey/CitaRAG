@@ -59,10 +59,26 @@ public class VectorStoreService {
                     .dimension(dimension)
                     .retrieveEmbeddingsOnSearch(true) // Helper to retrieve embeddings if needed
                     .build();
+
+            // Warm-up the model to ensure it's loaded before user requests
+            warmUpModel();
+
         } catch (Exception e) {
             e.printStackTrace();
             throw e;
         }
+    }
+
+    private void warmUpModel() {
+        new Thread(() -> {
+            try {
+                System.out.println("Warming up embedding model...");
+                embeddingModel.embed("Warm up");
+                System.out.println("Embedding model warmed up and ready.");
+            } catch (Exception e) {
+                System.err.println("Failed to warm up model: " + e.getMessage());
+            }
+        }).start();
     }
 
     public void storeChunks(List<Map<String, Object>> chunks) {
@@ -103,40 +119,36 @@ public class VectorStoreService {
         }
 
         if (!allSegments.isEmpty()) {
-            int batchSize = 10; // Process in batches of 10 to avoid timeouts
+            int batchSize = 10;
             int totalSegments = allSegments.size();
-            int processed = 0;
 
             System.out.println("Starting embedding generation for " + totalSegments + " segments...");
 
+            List<List<TextSegment>> batches = new ArrayList<>();
             for (int i = 0; i < totalSegments; i += batchSize) {
-                int end = Math.min(i + batchSize, totalSegments);
-                List<TextSegment> batch = allSegments.subList(i, end);
-
-                try {
-                    // Generate Embeddings for batch
-                    List<Embedding> embeddings = embeddingModel.embedAll(batch).content();
-
-                    // Store batch in Milvus
-                    embeddingStore.addAll(embeddings, batch);
-
-                    processed += batch.size();
-                    System.out.println("Processed batch " + (i / batchSize + 1) + "/"
-                            + ((totalSegments + batchSize - 1) / batchSize) +
-                            " (" + processed + "/" + totalSegments + " segments)");
-
-                } catch (Exception e) {
-                    System.err.println("Error processing batch " + (i / batchSize + 1) + ": " + e.getMessage());
-                    // Consider whether to throw or continue. For now, we log and rethrow to stop
-                    // processing causing partial failure state
-                    // or we could continue to try best effort.
-                    // Given the user wants to avoid timeouts, failing fast on a batch is better
-                    // than hanging.
-                    throw new RuntimeException("Failed to process batch of embeddings", e);
-                }
+                batches.add(allSegments.subList(i, Math.min(i + batchSize, totalSegments)));
             }
 
-            System.out.println("Stored " + processed + " vectors in Milvus collection: " + collectionName);
+            // Process batches in parallel
+            // Note: Since Ollama on CPU might be the bottleneck, we limit concurrency to
+            // avoid thrashing
+            // but enough to keep the queue feeding. Common pool is usually sufficient.
+            java.util.concurrent.atomic.AtomicInteger processedCount = new java.util.concurrent.atomic.AtomicInteger(0);
+
+            batches.parallelStream().forEach(batch -> {
+                try {
+                    List<Embedding> embeddings = embeddingModel.embedAll(batch).content();
+                    embeddingStore.addAll(embeddings, batch);
+
+                    int current = processedCount.addAndGet(batch.size());
+                    System.out.println("Processed " + current + "/" + totalSegments + " segments");
+                } catch (Exception e) {
+                    System.err.println("Error processing batch: " + e.getMessage());
+                    throw new RuntimeException("Failed to process batch", e);
+                }
+            });
+
+            System.out.println("Stored " + totalSegments + " vectors in Milvus collection: " + collectionName);
         }
     }
 
