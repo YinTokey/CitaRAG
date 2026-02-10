@@ -5,7 +5,7 @@ import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.model.openai.OpenAiEmbeddingModel;
 import dev.langchain4j.store.embedding.EmbeddingStore;
-import dev.langchain4j.store.embedding.pinecone.PineconeEmbeddingStore;
+import dev.langchain4j.store.embedding.milvus.MilvusEmbeddingStore;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -20,33 +20,43 @@ public class VectorStoreService {
     @Value("${langchain4j.open-ai.embedding-model.api-key}")
     private String openAiApiKey;
 
-    @Value("${langchain4j.pinecone.api-key}")
-    private String pineconeApiKey;
+    @Value("${langchain4j.milvus.host}")
+    private String milvusHost;
 
-    @Value("${langchain4j.pinecone.environment}")
-    private String pineconeEnvironment;
+    @Value("${langchain4j.milvus.port}")
+    private int milvusPort;
 
-    @Value("${langchain4j.pinecone.index-name}")
-    private String indexName;
+    @Value("${langchain4j.milvus.collection-name}")
+    private String collectionName;
+
+    @Value("${langchain4j.milvus.dimension}")
+    private int dimension;
 
     private EmbeddingModel embeddingModel;
     private EmbeddingStore<TextSegment> embeddingStore;
 
     @PostConstruct
     public void init() {
-        // Initialize Embedding Model (OpenAI text-embedding-3-small)
-        this.embeddingModel = OpenAiEmbeddingModel.builder()
-                .apiKey(openAiApiKey)
-                .modelName("text-embedding-3-small")
-                .dimensions(512) // Match existing Pinecone index dimension
-                .build();
+        try {
+            // Initialize Embedding Model (OpenAI text-embedding-3-small)
+            this.embeddingModel = OpenAiEmbeddingModel.builder()
+                    .apiKey(openAiApiKey)
+                    .modelName("text-embedding-3-small")
+                    .dimensions(dimension)
+                    .build();
 
-        // Initialize Pinecone Store
-        this.embeddingStore = PineconeEmbeddingStore.builder()
-                .apiKey(pineconeApiKey)
-                .environment(pineconeEnvironment)
-                .index(indexName)
-                .build();
+            // Initialize Milvus Store
+            this.embeddingStore = MilvusEmbeddingStore.builder()
+                    .host(milvusHost)
+                    .port(milvusPort)
+                    .collectionName(collectionName)
+                    .dimension(dimension)
+                    .retrieveEmbeddingsOnSearch(true) // Helper to retrieve embeddings if needed
+                    .build();
+        } catch (Exception e) {
+            e.printStackTrace();
+            throw e;
+        }
     }
 
     public void storeChunks(List<Map<String, Object>> chunks) {
@@ -63,7 +73,7 @@ public class VectorStoreService {
             @SuppressWarnings("unchecked")
             Map<String, Object> metadataMap = (Map<String, Object>) chunk.get("metadata"); // Flattened metadata
 
-            // Convert metadata values to strings for Pinecone/LangChain4j compatibility
+            // Convert metadata values to strings for Milvus/LangChain4j compatibility
             dev.langchain4j.data.document.Metadata metadata = new dev.langchain4j.data.document.Metadata();
 
             if (metadataMap != null) {
@@ -90,10 +100,10 @@ public class VectorStoreService {
             // Generate Embeddings
             List<Embedding> embeddings = embeddingModel.embedAll(segments).content();
 
-            // Store in Pinecone
+            // Store in Milvus
             embeddingStore.addAll(embeddings, segments);
 
-            System.out.println("Stored " + segments.size() + " vectors in Pinecone index: " + indexName);
+            System.out.println("Stored " + segments.size() + " vectors in Milvus collection: " + collectionName);
         }
     }
 
@@ -102,10 +112,7 @@ public class VectorStoreService {
         // Embed the query
         Embedding queryEmbedding = embeddingModel.embed(queryText).content();
 
-        // Search in Pinecone (using findRelevant which is fine for now, or use search
-        // request builder if available)
-        // LangChain4j 0.3x deprecates simple findRelevant for Request object, but
-        // simpler to stick for now
+        // Search in Milvus
         return embeddingStore.findRelevant(queryEmbedding, maxResults);
     }
 }

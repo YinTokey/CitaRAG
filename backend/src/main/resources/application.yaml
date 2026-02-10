@@ -11,7 +11,8 @@ langchain4j:
     embedding-model:
       api-key: ${OPENAI_API_KEY:demo}
       model-name: text-embedding-3-small
-  pinecone:
-    api-key: ${PINECONE_API_KEY:demo}
-    environment: us-east-1 # Or make this configurable if needed, but user didn't specifying region. Actually "environment" usually is "us-east-1-aws" or similar. But recent Pinecone serverless indexes don't use environment in exactly the same way (it is inferred from API key/index URL but java lib might require it). Let's default or ask. LangChain4j PineconeStore builder usually takes apiKey, environment, projectId, indexName. With serverless, environment can be region. Let's assume standard setup.
-    index-name: citarag
+  milvus:
+    host: localhost
+    port: 19530
+    collection-name: citarag
+    dimension: 1536 # text-embedding-3-small default is 1536, but previous code said 512? checking service.

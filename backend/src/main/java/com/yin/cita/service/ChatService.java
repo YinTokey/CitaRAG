@@ -24,6 +24,9 @@ public class ChatService {
     @Value("${langchain4j.open-ai.chat-model.model-name}")
     private String modelName;
 
+    @Value("${langchain4j.open-ai.chat-model.temperature}")
+    private Double temperature;
+
     @Autowired
     private VectorStoreService vectorStoreService;
 
@@ -37,7 +40,7 @@ public class ChatService {
         model = OpenAiChatModel.builder()
                 .apiKey(openAiApiKey)
                 .modelName(modelName)
-                .temperature(0.7)
+                .temperature(temperature)
                 .build();
     }
 
