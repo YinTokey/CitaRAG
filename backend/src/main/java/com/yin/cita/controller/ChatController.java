@@ -14,14 +14,24 @@ public class ChatController {
     @Autowired
     private ChatService chatService;
 
-    @PostMapping
-    public ResponseEntity<Map<String, Object>> chat(@RequestBody Map<String, String> payload) {
-        String query = payload.get("query");
+    @PostMapping(produces = org.springframework.http.MediaType.TEXT_EVENT_STREAM_VALUE)
+    public org.springframework.web.servlet.mvc.method.annotation.SseEmitter chat(
+            @RequestBody Map<String, Object> payload) {
+        String query = (String) payload.get("query");
+
+        org.springframework.web.servlet.mvc.method.annotation.SseEmitter emitter = new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(
+                60000L); // 1 minute timeout
+
         if (query == null || query.trim().isEmpty()) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Query is required"));
+            try {
+                emitter.completeWithError(new IllegalArgumentException("Query is required"));
+            } catch (Exception e) {
+                // ignore
+            }
+            return emitter;
         }
 
-        Map<String, Object> response = chatService.chat(query);
-        return ResponseEntity.ok(response);
+        chatService.streamChat(query, emitter);
+        return emitter;
     }
 }

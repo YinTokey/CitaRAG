@@ -14,6 +14,7 @@ import LibraryBooksIcon from '@mui/icons-material/LibraryBooks';
 import KeyboardDoubleArrowLeftIcon from '@mui/icons-material/KeyboardDoubleArrowLeft';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import ReactMarkdown from 'react-markdown';
 
 import CitationList from './components/CitationList';
 import LibraryView from './components/LibraryView';
@@ -95,17 +96,70 @@ function App() {
         body: JSON.stringify({ query: userMsg.text, web_search: isWebSearch }),
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        const botMsg: Message = {
-          text: data.answer,
-          sender: 'bot',
-          citations: data.citations
-        };
-        setMessages((prev) => [...prev, botMsg]);
-      } else {
-        setMessages((prev) => [...prev, { text: "Error: Unable to get response.", sender: 'bot' }]);
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
       }
+
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error('Response body is null');
+
+      const decoder = new TextDecoder();
+      let botMsg: Message = { text: '', sender: 'bot', citations: [] };
+      setMessages((prev) => [...prev, botMsg]);
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data:')) {
+            const data = line.slice(5);
+            // if (!data) continue; // Removed to allow empty signals if any, but mainly to avoid trimming spaces
+
+            try {
+              if (data.startsWith('{') || data.startsWith('[')) {
+                try {
+                  const event = JSON.parse(data);
+                  if (event.type === 'citations') {
+                    botMsg.citations = event.data;
+                    setMessages((prev) => {
+                      const newMessages = [...prev];
+                      newMessages[newMessages.length - 1] = { ...botMsg };
+                      return newMessages;
+                    });
+                    continue;
+                  }
+                } catch (e) {
+                  // Not JSON, treat as text
+                }
+              }
+
+              // Assume token if not special event
+              if (data) {
+                botMsg.text += data;
+                setMessages((prev) => {
+                  const newMessages = [...prev];
+                  newMessages[newMessages.length - 1] = { ...botMsg };
+                  return newMessages;
+                });
+              }
+            } catch (e) {
+              botMsg.text += data;
+              setMessages((prev) => {
+                const newMessages = [...prev];
+                newMessages[newMessages.length - 1] = { ...botMsg };
+                return newMessages;
+              });
+            }
+          }
+        }
+      }
+
+      // I'll implementing a better parser in the replacement content below.
+
     } catch (error) {
       console.error('Chat error:', error);
       setMessages((prev) => [...prev, { text: "Network error. Please try again.", sender: 'bot' }]);
@@ -290,13 +344,25 @@ function App() {
                 boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
                 mb: 1
               }}>
-                <Typography variant="body1" sx={{
-                  whiteSpace: 'pre-wrap',
-                  fontSize: '0.9rem',
-                  lineHeight: 1.5,
+                <Box sx={{
+                  fontFamily: 'inherit',
+                  '& p': { m: 0, mb: 1.5, lineHeight: 1.6 },
+                  '& p:last-child': { mb: 0 },
+                  '& ul, & ol': { m: 0, pl: 3, mb: 1.5 },
+                  '& li': { mb: 0.5, lineHeight: 1.6 },
+                  '& li > p': { mb: 0.5 }, /* Handle nested paragraphs in lists */
+                  '& code': { bgcolor: 'rgba(0,0,0,0.06)', px: 0.8, py: 0.2, borderRadius: 1, fontFamily: 'monospace', fontSize: '0.85em' },
+                  '& pre': { bgcolor: '#f5f5f5', p: 1.5, borderRadius: 2, overflowX: 'auto', my: 1.5, border: '1px solid rgba(0,0,0,0.05)', '& code': { bgcolor: 'transparent', p: 0, fontSize: '0.9em' } },
+                  '& h1, & h2, & h3, & h4': { mt: 2, mb: 1, fontWeight: 600 },
+                  '& h1': { fontSize: '1.4em' },
+                  '& h2': { fontSize: '1.25em' },
+                  '& h3': { fontSize: '1.1em' },
+                  '& blockquote': { borderLeft: '4px solid #ddd', m: 0, pl: 2, color: 'text.secondary', my: 1.5 }
                 }}>
-                  {msg.text}
-                </Typography>
+                  <ReactMarkdown>
+                    {msg.text}
+                  </ReactMarkdown>
+                </Box>
               </Box>
 
               {/* Citations & Actions Row (Bot Only) */}
