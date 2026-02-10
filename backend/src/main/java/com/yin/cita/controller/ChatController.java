@@ -17,6 +17,7 @@ public class ChatController {
     public org.springframework.web.servlet.mvc.method.annotation.SseEmitter chat(
             @RequestBody Map<String, Object> payload) {
         String query = (String) payload.get("query");
+        String model = (String) payload.get("model");
 
         org.springframework.web.servlet.mvc.method.annotation.SseEmitter emitter = new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(
                 60000L); // 1 minute timeout
@@ -30,7 +31,7 @@ public class ChatController {
             return emitter;
         }
 
-        chatService.streamChat(query, emitter);
+        chatService.streamChat(query, model, emitter);
         return emitter;
     }
 }

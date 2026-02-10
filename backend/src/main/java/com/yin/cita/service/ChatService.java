@@ -4,7 +4,6 @@ import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.model.StreamingResponseHandler;
 import dev.langchain4j.model.chat.StreamingChatLanguageModel;
-import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
 import dev.langchain4j.model.output.Response;
 import dev.langchain4j.store.embedding.EmbeddingMatch;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,7 +13,6 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
 
-import jakarta.annotation.PostConstruct;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -24,33 +22,42 @@ import java.util.stream.Collectors;
 @Service
 public class ChatService {
 
-    @Value("${langchain4j.open-ai.chat-model.api-key}")
-    private String openAiApiKey;
-
-    @Value("${langchain4j.open-ai.chat-model.model-name}")
-    private String modelName;
-
-    @Value("${langchain4j.open-ai.chat-model.temperature}")
-    private Double temperature;
+    @Value("${langchain4j.ollama.embedding-model.base-url:http://localhost:11434}")
+    private String ollamaBaseUrl;
 
     @Autowired
     private VectorStoreService vectorStoreService;
 
-    private StreamingChatLanguageModel streamingModel;
+    @Autowired
+    private OllamaService ollamaService;
 
-    @PostConstruct
-    public void init() {
-        if (openAiApiKey == null || openAiApiKey.equals("demo")) {
-            System.err.println("WARNING: OPENAI_API_KEY is not set. Chat synthesis will fail.");
+    // Cache models to avoid rebuilding on every request if possible,
+    // but building is cheap so we can just build on demand.
+
+    public void streamChat(String query, String modelName, SseEmitter emitter) {
+        // 0. Validate that the model exists before attempting inference
+        try {
+            List<String> availableModels = ollamaService.listModels();
+            String actualModelName = modelName != null && !modelName.isEmpty() ? modelName : "phi3:mini";
+
+            // Check if model exists (case-insensitive and handles tags like :latest)
+            boolean modelExists = availableModels.stream()
+                    .anyMatch(m -> m.toLowerCase().contains(actualModelName.toLowerCase().split(":")[0]));
+
+            if (!modelExists) {
+                Map<String, Object> errorEvent = new HashMap<>();
+                errorEvent.put("type", "error");
+                errorEvent.put("message", "Model '" + actualModelName
+                        + "' is not available. Please download it first from the model selector.");
+                emitter.send(SseEmitter.event().name("error").data(errorEvent));
+                emitter.complete();
+                return;
+            }
+        } catch (Exception e) {
+            System.err.println("Failed to check model availability: " + e.getMessage());
+            // Continue anyway - model check is best-effort
         }
-        streamingModel = OpenAiStreamingChatModel.builder()
-                .apiKey(openAiApiKey)
-                .modelName(modelName)
-                .temperature(temperature)
-                .build();
-    }
 
-    public void streamChat(String query, SseEmitter emitter) {
         // 1. Retrieve relevant chunks
         List<EmbeddingMatch<TextSegment>> matches = vectorStoreService.findRelevant(query, 5);
 
@@ -105,6 +112,14 @@ public class ChatService {
                 +
                 "Use bold for key terms and code blocks for code snippets.";
 
+        // Build Ollama Chat Model on demand with selected model
+        StreamingChatLanguageModel streamingModel = dev.langchain4j.model.ollama.OllamaStreamingChatModel.builder()
+                .baseUrl(ollamaBaseUrl)
+                .modelName(modelName != null && !modelName.isEmpty() ? modelName : "phi3:mini")
+                .timeout(java.time.Duration.ofSeconds(120))
+                .temperature(0.7) // Good default
+                .build();
+
         streamingModel.generate(prompt, new StreamingResponseHandler<AiMessage>() {
             @Override
             public void onNext(String token) {
@@ -126,9 +141,4 @@ public class ChatService {
             }
         });
     }
-
-    // Keep the old blocking method just in case, or remove it. For now, removing to
-    // force usage of stream or renaming it.
-    // Actually, let's keep it but rename it or just let it be if not used.
-    // I will remove it to clean up as per requirement "use the stream style".
 }

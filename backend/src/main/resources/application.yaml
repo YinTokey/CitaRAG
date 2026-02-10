@@ -1,6 +1,19 @@
 spring:
   application:
     name: cita
+  mvc:
+    async:
+      request-timeout: 3600000 # 60 minutes
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
+
+server:
+  tomcat:
+    connection-timeout: 3600000 # 60 minutes
+    keep-alive-timeout: 3600000 # 60 minutes
+    max-swallow-size: -1
 
 langchain4j:
   open-ai:
@@ -10,11 +23,11 @@ langchain4j:
       temperature: 1.0
   ollama:
     embedding-model:
-      base-url: http://localhost:11434
+      base-url: http://127.0.0.1:11434
       model-name: embeddinggemma
       timeout: 120s
   milvus:
-    host: localhost
+    host: 127.0.0.1
     port: 19530
     collection-name: citarag
     dimension: 768 # EmbeddingGemma-300m dimension

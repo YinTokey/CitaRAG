@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Box, Paper, TextField, IconButton, Typography, CircularProgress, Button, Collapse, Fade, Menu, MenuItem, ListItemIcon, ListItemText, List, ListItem, Divider } from '@mui/material';
+import { Box, Paper, TextField, IconButton, Typography, CircularProgress, Button, Collapse, Fade, Menu, MenuItem, ListItemIcon, ListItemText, List, ListItem, Divider, LinearProgress } from '@mui/material';
 import CopyAllIcon from '@mui/icons-material/CopyAll';
 import ThumbUpOutlinedIcon from '@mui/icons-material/ThumbUpOutlined';
 import ArticleOutlinedIcon from '@mui/icons-material/ArticleOutlined';
@@ -14,6 +14,7 @@ import LibraryBooksIcon from '@mui/icons-material/LibraryBooks';
 import KeyboardDoubleArrowLeftIcon from '@mui/icons-material/KeyboardDoubleArrowLeft';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import CheckIcon from '@mui/icons-material/Check';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
@@ -29,6 +30,33 @@ interface Message {
 
 type ViewState = 'chat' | 'menu' | 'library';
 
+const AVAILABLE_MODELS = [
+  {
+    id: 'llama3.2:1b',
+    name: 'LLaMA 3.2 1B',       // ~1.3 GB - fastest
+  },
+  {
+    id: 'gemma2:2b',
+    name: 'Gemma 2 2B',          // ~1.6 GB - good quality/size ratio
+  },
+  {
+    id: 'phi3:mini',
+    name: 'Phi-3 Mini',          // ~2.2 GB - best reasoning for size
+  },
+  {
+    id: 'qwen2.5:0.5b',
+    name: 'Qwen 2.5 0.5B',       // ~400 MB - absolute smallest
+  },
+  {
+    id: 'qwen2.5:1.5b',
+    name: 'Qwen 2.5 1.5B',       // ~1 GB - great for the size
+  },
+  {
+    id: 'tinyllama',
+    name: 'TinyLlama 1.1B',      // ~638 MB
+  },
+];
+
 function App() {
   const [files, setFiles] = useState<File[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -41,13 +69,16 @@ function App() {
   const [plusMenuAnchor, setPlusMenuAnchor] = useState<null | HTMLElement>(null);
   const [headerMenuAnchor, setHeaderMenuAnchor] = useState<null | HTMLElement>(null);
   const [modelMenuAnchor, setModelMenuAnchor] = useState<null | HTMLElement>(null);
-  const [selectedModel, setSelectedModel] = useState('Gemini 1.5 Pro');
+  const [selectedModel, setSelectedModel] = useState<any>(null);
+
+  // Model Download State
+  const [isDownloadingModel, setIsDownloadingModel] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState(0);
 
   // Navigation State
   const [currentView, setCurrentView] = useState<ViewState>('chat');
 
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -56,6 +87,29 @@ function App() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  useEffect(() => {
+    const checkModels = async () => {
+      try {
+        const response = await fetch('http://localhost:8080/api/models');
+        if (response.ok) {
+          const existingModels = await response.json();
+          if (existingModels && existingModels.length > 0) {
+            for (const avail of AVAILABLE_MODELS) {
+              const modelName = avail.id.split(':')[0];
+              if (existingModels.some((m: string) => m.includes(modelName))) {
+                setSelectedModel(avail);
+                return;
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error("Failed to fetch initial models", e);
+      }
+    };
+    checkModels();
+  }, []);
 
   const handleFileUpload = async (file: File) => {
     setIsUploading(true);
@@ -94,7 +148,11 @@ function App() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ query: userMsg.text, web_search: isWebSearch }),
+        body: JSON.stringify({
+          query: userMsg.text,
+          web_search: isWebSearch,
+          model: selectedModel ? selectedModel.id : 'phi3:mini'
+        }),
       });
 
       if (!response.ok) {
@@ -115,9 +173,8 @@ function App() {
 
         buffer += decoder.decode(value, { stream: true });
 
-        // Split by double newline which separates SSE events
         const parts = buffer.split('\n\n');
-        buffer = parts.pop() || ''; // Keep the last incomplete part in the buffer
+        buffer = parts.pop() || '';
 
         for (const part of parts) {
           const lines = part.split('\n');
@@ -128,8 +185,6 @@ function App() {
             if (line.startsWith('event:')) {
               eventType = line.slice(6).trim();
             } else if (line.startsWith('data:')) {
-              // Append data line with newline if there's already data (per SSE spec)
-              // This is crucial for preserving newlines sent by the backend
               eventData += (eventData ? '\n' : '') + line.slice(5);
             }
           }
@@ -137,7 +192,6 @@ function App() {
           if (!eventData && eventType === 'message') continue;
 
           try {
-            // Check if it's our JSON event (citations)
             if (eventData.startsWith('{') || eventData.startsWith('[')) {
               try {
                 const event = JSON.parse(eventData);
@@ -155,7 +209,6 @@ function App() {
               }
             }
 
-            // Standard token or text
             botMsg.text += eventData;
             setMessages((prev) => {
               const newMessages = [...prev];
@@ -164,13 +217,10 @@ function App() {
             });
           } catch (e) {
             console.error("Error processing event", e, eventData);
-            // Fallback: just append as is
             botMsg.text += eventData;
           }
         }
       }
-
-      // I'll implementing a better parser in the replacement content below.
 
     } catch (error) {
       console.error('Chat error:', error);
@@ -215,9 +265,95 @@ function App() {
     setModelMenuAnchor(null);
   };
 
-  const handleModelSelect = (model: string) => {
-    setSelectedModel(model);
+  const handleModelSelect = async (modelId: string) => {
+    const model = AVAILABLE_MODELS.find(m => m.id === modelId);
+    if (!model) return;
+
     handleModelClose();
+
+    // check if model exists
+    try {
+      const response = await fetch('http://localhost:8080/api/models');
+      const models = await response.json();
+      const modelName = model.id.split(':')[0]; // Simple check
+
+      const exists = models.some((m: string) => m.includes(modelName));
+
+      if (exists) {
+        setSelectedModel(model);
+      } else {
+        // Pull model
+        setIsDownloadingModel(true);
+        setDownloadProgress(0);
+        try {
+          const pullResponse = await fetch('http://localhost:8080/api/models/pull', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: model.id })
+          });
+
+          if (!pullResponse.ok) throw new Error("Failed to pull model");
+
+          const reader = pullResponse.body?.getReader();
+          const decoder = new TextDecoder();
+
+          if (reader) {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+
+              const chunk = decoder.decode(value, { stream: true });
+              const lines = chunk.split('\n').filter(line => line.trim() !== '');
+
+              for (const line of lines) {
+                try {
+                  const jsonStr = line.startsWith('data:') ? line.slice(5) : line;
+                  const data = JSON.parse(jsonStr);
+
+                  // Log for debugging
+                  console.log('Ollama pull progress:', data);
+
+                  // Handle all possible status types from Ollama
+                  if (data.status) {
+                    // Check for completion
+                    if (data.status === 'success' || data.status.includes('success')) {
+                      setDownloadProgress(100);
+                    }
+                    // Check for progress with total/completed
+                    else if (data.total && data.completed) {
+                      const progress = (data.completed / data.total) * 100;
+                      setDownloadProgress(progress);
+                    }
+                    // If downloading/pulling but no progress info, show indeterminate (50%)
+                    else if (data.status.includes('downloading') ||
+                      data.status.includes('pulling') ||
+                      data.status.includes('verifying')) {
+                      // Keep progress bar visible but indeterminate
+                      if (downloadProgress === 0) {
+                        setDownloadProgress(10); // Show some activity
+                      }
+                    }
+                  }
+                } catch (e) {
+                  console.warn('Failed to parse progress:', line);
+                }
+              }
+            }
+          }
+
+          setSelectedModel(model);
+        } catch (e) {
+          console.error("Failed to download model", e);
+          alert("Failed to download model " + model.name);
+        } finally {
+          setIsDownloadingModel(false);
+          setDownloadProgress(0);
+        }
+      }
+    } catch (e) {
+      console.error("Error checking/pulling model", e);
+      setSelectedModel(model); // Optimistic fallback
+    }
   };
 
   const handleNewChat = () => {
@@ -229,19 +365,46 @@ function App() {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', bgcolor: 'transparent', position: 'relative', overflow: 'hidden' }}>
 
-      {/* HEADER: Redesigned based on screenshot */}
-      {/* HEADER: Redesigned based on screenshot */}
+      {/* HEADER */}
       {currentView === 'chat' && (
         <Box sx={{
           position: 'absolute',
           top: 14,
           right: 14,
+          left: 14,
           zIndex: 5,
           display: 'flex',
           gap: 1.5,
-          alignItems: 'center'
+          alignItems: 'center',
+          justifyContent: 'flex-end'
         }}>
-          {/* New Chat Button: Square with border */}
+          {isDownloadingModel && (
+            <Fade in={isDownloadingModel}>
+              <Box sx={{
+                mr: 'auto', // push to left
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1,
+                bgcolor: 'var(--background-primary)',
+                p: 0.5,
+                px: 1.5,
+                borderRadius: 2,
+                border: '1px solid var(--background-modifier-border)',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+              }}>
+                <CircularProgress size={14} thickness={5} />
+                <Typography variant="caption" sx={{ fontWeight: 600, color: 'var(--text-normal)' }}>
+                  Downloading {selectedModel ? selectedModel.name : "Model"}...
+                </Typography>
+                <Box sx={{ width: 100, ml: 1 }}>
+                  <LinearProgress variant="determinate" value={downloadProgress} sx={{ height: 4, borderRadius: 2 }} />
+                </Box>
+                <Typography variant="caption" color="text.secondary" sx={{ minWidth: 35 }}>
+                  {Math.round(downloadProgress)}%
+                </Typography>
+              </Box>
+            </Fade>
+          )}
           <IconButton
             size="small"
             onClick={handleNewChat}
@@ -298,7 +461,7 @@ function App() {
         </Box>
       )}
 
-      {/* HEADER MENU (from Dots) */}
+      {/* HEADER MENU */}
       <Menu
         anchorEl={headerMenuAnchor}
         open={Boolean(headerMenuAnchor)}
@@ -438,7 +601,7 @@ function App() {
           <div ref={messagesEndRef} />
         </Box>
 
-        {/* 2. Floating Input Card Area: Redesigned based on screenshot */}
+        {/* 2. Floating Input Card Area */}
         <Box sx={{
           position: 'absolute',
           bottom: 0,
@@ -468,7 +631,7 @@ function App() {
 
           <Paper elevation={0} sx={{
             p: 0,
-            borderRadius: 5, // More rounded as in screenshot
+            borderRadius: 5,
             border: '1px solid var(--background-modifier-border)',
             bgcolor: 'var(--background-primary)',
             overflow: 'hidden',
@@ -545,7 +708,7 @@ function App() {
                   }}
                 >
                   <Typography variant="caption" sx={{ fontWeight: 600, color: 'var(--text-normal)', opacity: 0.8 }}>
-                    {selectedModel}
+                    {selectedModel ? selectedModel.name : "Select Model"}
                   </Typography>
                   <ExpandMoreIcon sx={{ fontSize: 14, color: 'var(--text-muted)', opacity: 0.7 }} />
                 </Box>
@@ -607,8 +770,6 @@ function App() {
         </Box>
       </Box>
 
-
-
       {/* LIBRARY VIEW (Full Overlay) */}
       <Fade in={currentView === 'library'}>
         <Box sx={{
@@ -641,30 +802,26 @@ function App() {
           sx: {
             borderRadius: 2,
             mt: -1,
-            minWidth: 180,
+            minWidth: 200,
             bgcolor: 'var(--background-primary)',
             border: '1px solid var(--background-modifier-border)',
             boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
           }
         }}
       >
-        <MenuItem onClick={() => handleModelSelect('gpt-5-mini')} sx={{ py: 1, fontSize: '0.85rem' }}>
-          gpt-5-mini
-        </MenuItem>
-        <MenuItem onClick={() => handleModelSelect('gemini 2.0')} sx={{ py: 1, fontSize: '0.85rem' }}>
-          gemini 2.0
-        </MenuItem>
-        <MenuItem onClick={() => handleModelSelect('Gemini 1.5 Pro')} sx={{ py: 1, fontSize: '0.85rem' }}>
-          Gemini 1.5 Pro
-        </MenuItem>
-
-        <Divider sx={{ my: 0.5, bgcolor: 'var(--background-modifier-border)', opacity: 0.5 }} />
-
-        <MenuItem sx={{ py: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Typography sx={{ fontSize: '0.85rem' }}>more</Typography>
-          <ChevronRightIcon sx={{ fontSize: 16, color: 'var(--text-muted)' }} />
-        </MenuItem>
+        {AVAILABLE_MODELS.map((model) => (
+          <MenuItem
+            key={model.id}
+            onClick={() => handleModelSelect(model.id)}
+            sx={{ py: 1, fontSize: '0.85rem', display: 'flex', justifyContent: 'space-between' }}
+          >
+            {model.name}
+            {selectedModel && selectedModel.id === model.id && <CheckIcon sx={{ fontSize: 16, color: 'var(--text-accent)' }} />}
+          </MenuItem>
+        ))}
       </Menu>
+
+
 
     </Box>
   );

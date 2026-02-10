@@ -73,10 +73,22 @@ public class VectorStoreService {
         new Thread(() -> {
             try {
                 System.out.println("Warming up embedding model...");
-                embeddingModel.embed("Warm up");
-                System.out.println("Embedding model warmed up and ready.");
+                // Simple retry loop for warmup
+                int maxRetries = 5;
+                for (int i = 0; i < maxRetries; i++) {
+                    try {
+                        embeddingModel.embed(dev.langchain4j.data.segment.TextSegment.from("Warm up")).content();
+                        System.out.println("Embedding model warmed up and ready.");
+                        break;
+                    } catch (Exception e) {
+                        if (i == maxRetries - 1)
+                            throw e;
+                        System.err.println("Warmup attempt " + (i + 1) + " failed, retrying in 5s: " + e.getMessage());
+                        Thread.sleep(5000);
+                    }
+                }
             } catch (Exception e) {
-                System.err.println("Failed to warm up model: " + e.getMessage());
+                System.err.println("Failed to warm up model after retries: " + e.getMessage());
             }
         }).start();
     }
