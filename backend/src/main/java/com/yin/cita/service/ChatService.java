@@ -22,7 +22,7 @@ import java.util.stream.Collectors;
 @Service
 public class ChatService {
 
-    @Value("${langchain4j.ollama.embedding-model.base-url:http://localhost:11434}")
+    @Value("${langchain4j.ollama.chat-model.base-url:http://127.0.0.1:11435}")
     private String ollamaBaseUrl;
 
     @Autowired

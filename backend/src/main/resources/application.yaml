@@ -24,7 +24,10 @@ langchain4j:
   ollama:
     embedding-model:
       base-url: http://127.0.0.1:11434
-      model-name: embeddinggemma
+      model-name: embeddinggemma:300m-qat-q8_0
+      timeout: 120s
+    chat-model:
+      base-url: http://127.0.0.1:11435
       timeout: 120s
   milvus:
     host: 127.0.0.1

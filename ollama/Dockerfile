@@ -1,7 +1,4 @@
 FROM ollama/ollama:latest
 
-# Copy entrypoint script
-COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
-
-ENTRYPOINT ["/entrypoint.sh"]
+# Pre-pull the embedding model during build
+RUN ollama serve & sleep 10 && ollama pull embeddinggemma:300m-qat-q8_0 && pkill ollama || true

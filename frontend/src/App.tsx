@@ -15,6 +15,7 @@ import KeyboardDoubleArrowLeftIcon from '@mui/icons-material/KeyboardDoubleArrow
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import CheckIcon from '@mui/icons-material/Check';
+import CloseIcon from '@mui/icons-material/Close';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
@@ -65,6 +66,7 @@ function App() {
   const [isDownloadingModel, setIsDownloadingModel] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [downloadingModelName, setDownloadingModelName] = useState<string>('');
+  const [downloadAbortController, setDownloadAbortController] = useState<AbortController | null>(null);
 
   // Navigation State
   const [currentView, setCurrentView] = useState<ViewState>('chat');
@@ -274,6 +276,8 @@ function App() {
         setSelectedModel(model);
       } else {
         // Pull model
+        const abortController = new AbortController();
+        setDownloadAbortController(abortController);
         setIsDownloadingModel(true);
         setDownloadProgress(0);
         setDownloadingModelName(model.name);
@@ -281,7 +285,8 @@ function App() {
           const pullResponse = await fetch('http://localhost:8080/api/models/pull', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: model.id })
+            body: JSON.stringify({ name: model.id }),
+            signal: abortController.signal
           });
 
           if (!pullResponse.ok) throw new Error("Failed to pull model");
@@ -341,11 +346,22 @@ function App() {
           setIsDownloadingModel(false);
           setDownloadProgress(0);
           setDownloadingModelName('');
+          setDownloadAbortController(null);
         }
       }
     } catch (e) {
       console.error("Error checking/pulling model", e);
       setSelectedModel(model); // Optimistic fallback
+    }
+  };
+
+  const handleCancelDownload = () => {
+    if (downloadAbortController) {
+      downloadAbortController.abort();
+      setIsDownloadingModel(false);
+      setDownloadProgress(0);
+      setDownloadingModelName('');
+      setDownloadAbortController(null);
     }
   };
 
@@ -395,6 +411,18 @@ function App() {
                 <Typography variant="caption" color="text.secondary" sx={{ minWidth: 35 }}>
                   {Math.round(downloadProgress)}%
                 </Typography>
+                <IconButton
+                  size="small"
+                  onClick={handleCancelDownload}
+                  sx={{
+                    ml: 0.5,
+                    width: 20,
+                    height: 20,
+                    '&:hover': { bgcolor: 'var(--background-modifier-hover)' }
+                  }}
+                >
+                  <CloseIcon sx={{ fontSize: 14 }} />
+                </IconButton>
               </Box>
             </Fade>
           )}
