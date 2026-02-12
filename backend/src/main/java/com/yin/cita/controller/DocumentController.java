@@ -30,7 +30,10 @@ public class DocumentController {
 
     @GetMapping
     public ResponseEntity<List<Document>> getAllDocuments() {
-        return ResponseEntity.ok(documentService.getAllDocuments());
+        System.out.println("REST Request to get all documents");
+        List<Document> docs = documentService.getAllDocuments();
+        System.out.println("Found " + docs.size() + " documents");
+        return ResponseEntity.ok(docs);
     }
 
     @GetMapping("/{id}")

@@ -1,5 +1,5 @@
-import React, { useRef, useState } from 'react';
-import { Box, Typography, Button, IconButton, Tab, Tabs, TextField, InputAdornment, Dialog, DialogTitle, DialogContent, Fade, Chip, CircularProgress, Backdrop } from '@mui/material';
+import React, { useRef, useState, useEffect } from 'react';
+import { Box, Typography, Button, IconButton, Tab, Tabs, TextField, InputAdornment, Dialog, DialogTitle, DialogContent, Fade, Chip, CircularProgress, Backdrop, DialogActions, List, ListItem, ListItemButton, ListItemText } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import CloudUploadOutlinedIcon from '@mui/icons-material/CloudUploadOutlined';
 import SearchIcon from '@mui/icons-material/Search';
@@ -8,26 +8,65 @@ import NoteAddOutlinedIcon from '@mui/icons-material/NoteAddOutlined';
 import InsertDriveFileOutlinedIcon from '@mui/icons-material/InsertDriveFileOutlined';
 import KeyboardDoubleArrowLeftIcon from '@mui/icons-material/KeyboardDoubleArrowLeft';
 import LibraryBooksIcon from '@mui/icons-material/LibraryBooks';
+import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolder';
+import FolderOpenIcon from '@mui/icons-material/FolderOpen';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+
+import { Document, Collection } from '../types';
 
 interface LibraryViewProps {
-    files: File[];
-    onUpload: (file: File) => void;
+    onUpload: (file: File) => Promise<void>;
     onBack: () => void;
     isUploading: boolean;
     isUploadOpen: boolean;
     setIsUploadOpen: (open: boolean) => void;
 }
 
-const LibraryView: React.FC<LibraryViewProps> = ({ files, onUpload, onBack, isUploading, isUploadOpen, setIsUploadOpen }) => {
+const LibraryView: React.FC<LibraryViewProps> = ({ onUpload, onBack, isUploading, isUploadOpen, setIsUploadOpen }) => {
     const [tabIndex, setTabIndex] = useState(0);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [searchQuery, setSearchQuery] = useState('');
 
+    // Backend Data State
+    const [documents, setDocuments] = useState<Document[]>([]);
+    const [collections, setCollections] = useState<Collection[]>([]);
+    const [isLoadingData, setIsLoadingData] = useState(false);
+
+    // Collection Dialog State
+    const [isCreateCollectionOpen, setIsCreateCollectionOpen] = useState(false);
+    const [newCollectionName, setNewCollectionName] = useState('');
+    const [newCollectionDesc, setNewCollectionDesc] = useState('');
+
+    // Add to Collection State
+    const [isAddToCollectionOpen, setIsAddToCollectionOpen] = useState(false);
+    const [selectedDocId, setSelectedDocId] = useState<number | null>(null);
+
+    // Fetch Data on Mount
+    useEffect(() => {
+        fetchData();
+    }, []);
+
+    const fetchData = async () => {
+        setIsLoadingData(true);
+        try {
+            const [docsRes, colsRes] = await Promise.all([
+                fetch('http://localhost:8080/api/documents'),
+                fetch('http://localhost:8080/api/collections')
+            ]);
+
+            if (docsRes.ok) setDocuments(await docsRes.json());
+            if (colsRes.ok) setCollections(await colsRes.json());
+        } catch (error) {
+            console.error("Failed to fetch library data:", error);
+        } finally {
+            setIsLoadingData(false);
+        }
+    };
+
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (file) {
-            onUpload(file);
-            setIsUploadOpen(false);
+            handleUploadWrapper(file);
         }
     };
 
@@ -35,34 +74,83 @@ const LibraryView: React.FC<LibraryViewProps> = ({ files, onUpload, onBack, isUp
         event.preventDefault();
         const file = event.dataTransfer.files?.[0];
         if (file) {
-            onUpload(file);
-            setIsUploadOpen(false);
+            handleUploadWrapper(file);
         }
+    };
+
+    const handleUploadWrapper = async (file: File) => {
+        await onUpload(file);
+        setIsUploadOpen(false);
+        fetchData(); // Refresh list after upload
     };
 
     const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
         event.preventDefault();
     };
 
-    // Filter files based on search query (mock search for now since files are just File objects)
-    const filteredFiles = files.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase()));
+    const handleCreateCollection = async () => {
+        if (!newCollectionName.trim()) return;
+        try {
+            const res = await fetch('http://localhost:8080/api/collections', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: newCollectionName, description: newCollectionDesc })
+            });
+            if (res.ok) {
+                setNewCollectionName('');
+                setNewCollectionDesc('');
+                setIsCreateCollectionOpen(false);
+                fetchData(); // Refresh collections
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    };
+
+    const handleAddToCollection = async (collectionId: number) => {
+        if (!selectedDocId) return;
+        try {
+            const res = await fetch(`http://localhost:8080/api/collections/${collectionId}/documents/${selectedDocId}`, {
+                method: 'POST'
+            });
+            if (res.ok) {
+                setIsAddToCollectionOpen(false);
+                setSelectedDocId(null);
+                // Optionally show success toast
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    };
+
+    // Filter documents
+    const filteredDocs = documents.filter(d =>
+        (d.title || d.filename).toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (d.author || '').toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
+    const filteredCollections = collections.filter(c =>
+        c.name.toLowerCase().includes(searchQuery.toLowerCase())
+    );
 
     return (
-        <Box className="library-view" sx={{ position: 'relative' }}>
+        <Box className="library-view" sx={{ position: 'relative', height: '100%', display: 'flex', flexDirection: 'column' }}>
 
             {/* Loading Overlay */}
             <Backdrop
                 sx={{ color: '#fff', zIndex: (theme) => theme.zIndex.drawer + 1, position: 'absolute' }}
-                open={isUploading}
+                open={isUploading || isLoadingData}
             >
                 <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                     <CircularProgress color="inherit" />
-                    <Typography variant="body2" sx={{ mt: 2, color: 'white' }}>Uploading...</Typography>
+                    <Typography variant="body2" sx={{ mt: 2, color: 'white' }}>
+                        {isUploading ? "Uploading..." : "Loading Library..."}
+                    </Typography>
                 </Box>
             </Backdrop>
 
             {/* Header */}
-            <Box sx={{ mb: 4, pt: 1 }}>
+            <Box sx={{ mb: 2, pt: 1, flexShrink: 0 }}>
                 <Button
                     onClick={onBack}
                     size="small"
@@ -80,105 +168,98 @@ const LibraryView: React.FC<LibraryViewProps> = ({ files, onUpload, onBack, isUp
                     <KeyboardDoubleArrowLeftIcon sx={{ fontSize: 18 }} />
                 </Button>
 
-                <Box sx={{ display: 'flex', alignItems: 'center', mt: 3, gap: 1.5 }}>
-                    <LibraryBooksIcon sx={{ color: 'var(--text-normal)', fontSize: 28 }} />
-                    <Typography variant="h5" fontWeight="700" sx={{ color: 'var(--text-normal)' }}>
-                        Library
-                    </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', mt: 2, gap: 1.5, justifyContent: 'space-between' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                        <LibraryBooksIcon sx={{ color: 'var(--text-normal)', fontSize: 24 }} />
+                        <Typography variant="h6" fontWeight="700" sx={{ color: 'var(--text-normal)' }}>
+                            Library
+                        </Typography>
+                    </Box>
+
+                    {documents.length > 0 && (
+                        <Button
+                            onClick={() => setIsUploadOpen(true)}
+                            startIcon={<CloudUploadOutlinedIcon />}
+                            size="small"
+                            variant="outlined"
+                            sx={{
+                                color: 'var(--text-normal)',
+                                borderColor: 'var(--divider-color)',
+                                textTransform: 'none'
+                            }}
+                        >
+                            Upload
+                        </Button>
+                    )}
                 </Box>
             </Box>
 
-            {/* Only show small upload button if populated */}
-            {files.length > 0 && (
-                <IconButton
-                    onClick={() => setIsUploadOpen(true)}
-                    size="small"
-                    sx={{
-                        bgcolor: 'var(--color-accent)',
-                        color: 'white',
-                        '&:hover': { bgcolor: 'var(--color-accent-hover)' },
-                        borderRadius: '8px',
-                        width: 32,
-                        height: 32
-                    }}
-                >
-                    <CloudUploadOutlinedIcon sx={{ fontSize: 18 }} />
-                </IconButton>
-            )}
+            {/* Content Area */}
+            {documents.length === 0 && !isLoadingData ? (
+                <Fade in={true} timeout={500}>
+                    <Box className="library-empty-state" sx={{ flexGrow: 1 }}>
+                        <div className="empty-state-icon-circle">
+                            <CloudUploadOutlinedIcon sx={{ fontSize: 32, color: 'var(--text-muted)' }} />
+                        </div>
+                        <Typography variant="body1" fontWeight="500" sx={{ color: 'var(--text-normal)', mb: 1 }}>
+                            Your library is empty
+                        </Typography>
+                        <Button
+                            variant="outlined"
+                            onClick={() => setIsUploadOpen(true)}
+                            sx={{ mt: 2 }}
+                        >
+                            Upload file
+                        </Button>
+                    </Box>
+                </Fade>
+            ) : (
+                <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+                    <TextField
+                        fullWidth
+                        placeholder="Search sources & collections..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        size="small"
+                        InputProps={{
+                            startAdornment: (
+                                <InputAdornment position="start">
+                                    <SearchIcon fontSize="small" sx={{ color: 'var(--text-muted)' }} />
+                                </InputAdornment>
+                            )
+                        }}
+                        className="library-search-input"
+                        sx={{ mb: 2 }}
+                    />
 
-            {/* EMPTY STATE */}
-            {
-                files.length === 0 ? (
-                    <Fade in={true} timeout={500}>
-                        <Box className="library-empty-state">
-                            <div className="empty-state-icon-circle">
-                                <CloudUploadOutlinedIcon sx={{ fontSize: 32, color: 'var(--text-muted)' }} />
-                            </div>
-
-                            <Typography variant="body1" fontWeight="500" sx={{ color: 'var(--text-normal)', mb: 1 }}>
-                                Your library is empty
-                            </Typography>
-                            <Typography variant="caption" sx={{ color: 'var(--text-muted)', mb: 4, display: 'block', maxWidth: '200px', lineHeight: 1.5 }}>
-                                Upload documents to let AI provide precise citations.
-                            </Typography>
-
-                            <Button
-                                variant="outlined"
-                                onClick={() => setIsUploadOpen(true)}
-                                sx={{
-                                    textTransform: 'none',
-                                    color: 'var(--text-normal)',
-                                    borderColor: 'var(--divider-color)',
-                                    borderRadius: '8px',
-                                    px: 3,
-                                    py: 1,
-                                    '&:hover': {
-                                        bgcolor: 'var(--background-secondary)',
-                                        borderColor: 'var(--text-muted)'
-                                    }
-                                }}
-                            >
-                                Upload file
-                            </Button>
-                        </Box>
-                    </Fade>
-                ) : (
-                    /* POPULATED STATE */
-                    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-                        <TextField
-                            fullWidth
-                            placeholder="Search sources..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            size="small"
-                            InputProps={{
-                                startAdornment: (
-                                    <InputAdornment position="start">
-                                        <SearchIcon fontSize="small" sx={{ color: 'var(--text-muted)' }} />
-                                    </InputAdornment>
-                                )
-                            }}
-                            className="library-search-input"
-                            sx={{ mb: 3 }}
-                        />
-
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
                         <Tabs
                             value={tabIndex}
                             onChange={(_, v) => setTabIndex(v)}
                             className="clean-tabs"
-                            sx={{ mb: 2 }}
                         >
-                            <Tab label={`Sources (${files.length})`} />
-                            <Tab label="Collections" />
+                            <Tab label={`Documents (${documents.length})`} />
+                            <Tab label={`Collections (${collections.length})`} />
                         </Tabs>
 
-                        <Box sx={{ flexGrow: 1, overflowY: 'auto' }}>
-                            {filteredFiles.map((file, idx) => (
-                                <Fade in={true} key={idx} timeout={300 + (idx * 50)}>
+                        {tabIndex === 1 && (
+                            <IconButton
+                                size="small"
+                                onClick={() => setIsCreateCollectionOpen(true)}
+                                sx={{ color: 'var(--text-accent)' }}
+                            >
+                                <CreateNewFolderIcon fontSize="small" />
+                            </IconButton>
+                        )}
+                    </Box>
+
+                    <Box sx={{ flexGrow: 1, overflowY: 'auto', pb: 4 }}>
+                        {/* DOCUMENTS TAB */}
+                        {tabIndex === 0 && (
+                            filteredDocs.map((doc) => (
+                                <Fade in={true} key={doc.id} timeout={300}>
                                     <Box className="file-list-item" sx={{ mb: 1.5 }}>
-                                        {/* Document Item */}
                                         <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
-                                            {/* Icon Placeholder */}
                                             <Box sx={{
                                                 width: 32,
                                                 height: 40,
@@ -191,25 +272,26 @@ const LibraryView: React.FC<LibraryViewProps> = ({ files, onUpload, onBack, isUp
                                             }}>
                                                 <InsertDriveFileOutlinedIcon sx={{ fontSize: 20, color: 'var(--text-muted)' }} />
                                             </Box>
-
                                             <Box sx={{ flexGrow: 1 }}>
-                                                <Typography variant="body2" fontWeight="600" sx={{ color: 'var(--text-normal)', mb: 0.5, lineHeight: 1.2 }}>
-                                                    {file.name}
+                                                <Typography variant="body2" fontWeight="600" sx={{ color: 'var(--text-normal)', mb: 0.5 }}>
+                                                    {doc.title || doc.filename}
                                                 </Typography>
-
                                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                                                    <Typography variant="caption" sx={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                                                        Unknown Author
+                                                    <Typography variant="caption" sx={{ color: 'var(--text-muted)' }}>
+                                                        {doc.author || 'Unknown Author'}
                                                     </Typography>
                                                     <Typography variant="caption" sx={{ color: 'var(--text-muted)' }}>•</Typography>
                                                     <Typography variant="caption" sx={{ color: 'var(--text-muted)' }}>
-                                                        {new Date().getFullYear()}
+                                                        {doc.publicationDate || doc.uploadDate?.substring(0, 4) || 'Unknown Date'}
                                                     </Typography>
                                                 </Box>
-
                                                 <Button
                                                     size="small"
                                                     startIcon={<NoteAddOutlinedIcon fontSize="small" />}
+                                                    onClick={() => {
+                                                        setSelectedDocId(doc.id);
+                                                        setIsAddToCollectionOpen(true);
+                                                    }}
                                                     sx={{
                                                         textTransform: 'none',
                                                         color: 'var(--text-normal)',
@@ -228,11 +310,39 @@ const LibraryView: React.FC<LibraryViewProps> = ({ files, onUpload, onBack, isUp
                                         </Box>
                                     </Box>
                                 </Fade>
-                            ))}
-                        </Box>
+                            ))
+                        )}
+
+                        {/* COLLECTIONS TAB */}
+                        {tabIndex === 1 && (
+                            filteredCollections.map((col) => (
+                                <Fade in={true} key={col.id} timeout={300}>
+                                    <Box className="file-list-item" sx={{ mb: 1.5 }}>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                            <FolderOpenIcon sx={{ color: 'var(--color-accent)', fontSize: 28 }} />
+                                            <Box sx={{ flexGrow: 1 }}>
+                                                <Typography variant="body2" fontWeight="600" sx={{ color: 'var(--text-normal)' }}>
+                                                    {col.name}
+                                                </Typography>
+                                                <Typography variant="caption" sx={{ color: 'var(--text-muted)' }}>
+                                                    {col.description || 'No description'} • {col.documents ? col.documents.length : 0} items
+                                                </Typography>
+                                            </Box>
+                                        </Box>
+                                    </Box>
+                                </Fade>
+                            ))
+                        )}
+
+                        {tabIndex === 1 && filteredCollections.length === 0 && (
+                            <Box sx={{ textAlign: 'center', mt: 4, color: 'var(--text-muted)' }}>
+                                <Typography variant="body2">No collections found.</Typography>
+                                <Button size="small" onClick={() => setIsCreateCollectionOpen(true)} sx={{ mt: 1 }}>Create one</Button>
+                            </Box>
+                        )}
                     </Box>
-                )
-            }
+                </Box>
+            )}
 
             {/* UPLOAD DIALOG */}
             <Dialog
@@ -241,64 +351,81 @@ const LibraryView: React.FC<LibraryViewProps> = ({ files, onUpload, onBack, isUp
                 fullWidth
                 maxWidth="sm"
                 PaperProps={{
-                    sx: {
-                        bgcolor: 'var(--background-primary)',
-                        color: 'var(--text-normal)',
-                        backgroundImage: 'none',
-                        borderRadius: 3,
-                        boxShadow: '0 10px 30px rgba(0,0,0,0.5)' // Force a shadow since obsidian might strip it
-                    }
+                    sx: { bgcolor: 'var(--background-primary)', color: 'var(--text-normal)', borderRadius: 3 }
                 }}
             >
-                <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '1rem', p: 3, pb: 1 }}>
+                <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     Upload to Library
-                    <IconButton size="small" onClick={() => setIsUploadOpen(false)} sx={{ color: 'var(--text-muted)' }}>
-                        <CloseIcon fontSize="small" />
-                    </IconButton>
+                    <IconButton size="small" onClick={() => setIsUploadOpen(false)}><CloseIcon fontSize="small" /></IconButton>
                 </DialogTitle>
-                <DialogContent sx={{ p: 3 }}>
+                <DialogContent>
                     <div
                         className="upload-drop-zone"
                         onDrop={handleDrop}
                         onDragOver={handleDragOver}
                         onClick={() => fileInputRef.current?.click()}
                     >
-                        <Box sx={{
-                            p: 2,
-                            borderRadius: '50%',
-                            bgcolor: 'var(--bg-subtle)',
-                            mb: 2,
-                            color: 'var(--color-accent)'
-                        }}>
+                        <Box sx={{ p: 2, borderRadius: '50%', bgcolor: 'var(--bg-subtle)', mb: 2, color: 'var(--color-accent)' }}>
                             <CloudUploadOutlinedIcon sx={{ fontSize: 32 }} />
                         </Box>
-
-                        <Typography variant="body1" fontWeight="600" sx={{ mb: 1 }}>
-                            Upload documents
-                        </Typography>
-
-                        <Typography variant="caption" sx={{ color: 'var(--text-muted)', mb: 3 }}>
-                            Drag & drop or <span style={{ color: 'var(--color-accent)', fontWeight: 600 }}>Browse</span>
-                        </Typography>
-
-                        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', justifyContent: 'center' }}>
-                            {['PDF', 'DOCX', 'TXT', 'MD'].map(ext => (
-                                <Chip key={ext} label={ext} size="small" sx={{
-                                    height: 20,
-                                    fontSize: '0.65rem',
-                                    bgcolor: 'var(--background-secondary)',
-                                    color: 'var(--text-muted)'
-                                }} />
-                            ))}
-                        </Box>
+                        <Typography variant="body1" fontWeight="600">Upload documents</Typography>
+                        <Typography variant="caption" sx={{ color: 'var(--text-muted)', mb: 3 }}>Drag & drop or Browse</Typography>
                     </div>
-                    <input
-                        type="file"
-                        ref={fileInputRef}
-                        style={{ display: 'none' }}
-                        onChange={handleFileChange}
+                    <input type="file" ref={fileInputRef} style={{ display: 'none' }} onChange={handleFileChange} />
+                </DialogContent>
+            </Dialog>
+
+            {/* CREATE COLLECTION DIALOG */}
+            <Dialog open={isCreateCollectionOpen} onClose={() => setIsCreateCollectionOpen(false)} maxWidth="xs" fullWidth PaperProps={{ sx: { bgcolor: 'var(--background-primary)', color: 'var(--text-normal)', borderRadius: 3 } }}>
+                <DialogTitle>New Collection</DialogTitle>
+                <DialogContent>
+                    <TextField
+                        autoFocus
+                        margin="dense"
+                        label="Collection Name"
+                        fullWidth
+                        variant="outlined"
+                        value={newCollectionName}
+                        onChange={(e) => setNewCollectionName(e.target.value)}
+                        sx={{ mb: 2, mt: 1 }}
+                    />
+                    <TextField
+                        margin="dense"
+                        label="Description (Optional)"
+                        fullWidth
+                        variant="outlined"
+                        value={newCollectionDesc}
+                        onChange={(e) => setNewCollectionDesc(e.target.value)}
                     />
                 </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setIsCreateCollectionOpen(false)}>Cancel</Button>
+                    <Button onClick={handleCreateCollection} variant="contained" disabled={!newCollectionName.trim()}>Create</Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* ADD TO COLLECTION DIALOG */}
+            <Dialog open={isAddToCollectionOpen} onClose={() => setIsAddToCollectionOpen(false)} maxWidth="xs" fullWidth PaperProps={{ sx: { bgcolor: 'var(--background-primary)', color: 'var(--text-normal)', borderRadius: 3 } }}>
+                <DialogTitle>Add to Collection</DialogTitle>
+                <DialogContent dividers>
+                    <List sx={{ pt: 0 }}>
+                        {collections.map((col) => (
+                            <ListItem disablePadding key={col.id}>
+                                <ListItemButton onClick={() => handleAddToCollection(col.id)}>
+                                    <ListItemText primary={col.name} secondary={`${col.documents ? col.documents.length : 0} items`} />
+                                    {col.documents?.some(d => d.id === selectedDocId) && <Typography variant="caption" color="success.main">Added</Typography>}
+                                </ListItemButton>
+                            </ListItem>
+                        ))}
+                        {collections.length === 0 && (
+                            <Typography variant="body2" sx={{ p: 2, textAlign: 'center', color: 'text.secondary' }}>No collections created yet.</Typography>
+                        )}
+                    </List>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setIsCreateCollectionOpen(true)} size="small" sx={{ mr: 'auto' }}>New Collection</Button>
+                    <Button onClick={() => setIsAddToCollectionOpen(false)}>Close</Button>
+                </DialogActions>
             </Dialog>
 
         </Box >

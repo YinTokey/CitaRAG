@@ -60,19 +60,24 @@ public class DocumentService {
         vectorStoreService.storeChunks(chunks);
 
         // 6. Extract document-level metadata
+        String title = null;
+        String author = null;
+        String publicationDate = null;
+
+        // Fallback to Tika / Heuristics
         Map<String, String> metadata = result.getMetadata();
-        String author = metadata.get("Author");
+        author = metadata.get("Author");
         if (author == null)
             author = metadata.get("creator");
         if (author == null)
             author = "Unknown";
 
-        String title = metadata.get("title");
+        title = metadata.get("title");
         if (title == null || title.isEmpty()) {
             title = file.getOriginalFilename();
         }
 
-        String publicationDate = metadata.get("Creation-Date");
+        publicationDate = metadata.get("Creation-Date");
         if (publicationDate == null)
             publicationDate = metadata.get("date");
         if (publicationDate == null)
@@ -80,10 +85,10 @@ public class DocumentService {
 
         // 7. Persist Document entity to PostgreSQL
         Document document = new Document();
-        document.setFilename(file.getOriginalFilename());
-        document.setTitle(title);
-        document.setAuthor(author);
-        document.setPublicationDate(publicationDate);
+        document.setFilename(truncate(file.getOriginalFilename(), 255));
+        document.setTitle(truncate(title, 255));
+        document.setAuthor(truncate(author, 255));
+        document.setPublicationDate(truncate(publicationDate, 255));
         document.setUploadDate(LocalDateTime.now());
 
         Document savedDoc = documentRepository.save(document);
@@ -95,7 +100,10 @@ public class DocumentService {
     }
 
     public List<Document> getAllDocuments() {
-        return documentRepository.findAll();
+        System.out.println("Service: Requesting all documents from repository...");
+        List<Document> all = documentRepository.findAll();
+        System.out.println("Service: Repository returned " + all.size() + " documents.");
+        return all;
     }
 
     public Optional<Document> getDocumentById(Long id) {
@@ -137,5 +145,12 @@ public class DocumentService {
                 .orElseThrow(() -> new RuntimeException("Document not found"));
 
         collectionRepository.removeDocument(collectionId, documentId);
+    }
+
+    private String truncate(String value, int length) {
+        if (value == null || value.length() <= length) {
+            return value;
+        }
+        return value.substring(0, length);
     }
 }

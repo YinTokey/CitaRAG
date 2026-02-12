@@ -795,7 +795,7 @@ function App() {
       </Box>
 
       {/* LIBRARY VIEW (Full Overlay) */}
-      <Fade in={currentView === 'library'}>
+      <Fade in={currentView === 'library'} unmountOnExit>
         <Box sx={{
           position: 'absolute',
           top: 0,
@@ -805,7 +805,6 @@ function App() {
           zIndex: 20
         }}>
           <LibraryView
-            files={files}
             onUpload={handleFileUpload}
             onBack={() => setCurrentView('chat')} // Back to chat
             isUploading={isUploading}
