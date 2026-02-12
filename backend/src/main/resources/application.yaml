@@ -9,6 +9,12 @@ spring:
       max-file-size: 50MB
       max-request-size: 50MB
 
+  datasource:
+    url: jdbc:postgresql://localhost:5432/citarag
+    username: postgres
+    password: postgres
+    driver-class-name: org.postgresql.Driver
+
 server:
   tomcat:
     connection-timeout: 3600000 # 60 minutes
