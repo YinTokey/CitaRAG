@@ -23,13 +23,29 @@ public class DocumentRepository {
         this.jdbcTemplate = jdbcTemplate;
     }
 
-    private final RowMapper<Document> documentRowMapper = (rs, rowNum) -> {
+    private final RowMapper<Document> fullDocumentRowMapper = (rs, rowNum) -> {
         Document doc = new Document();
         doc.setId(rs.getLong("id"));
         doc.setFilename(rs.getString("filename"));
         doc.setTitle(rs.getString("title"));
         doc.setAuthor(rs.getString("author"));
         doc.setPublicationDate(rs.getString("publication_date"));
+        doc.setContent(rs.getString("content"));
+        Timestamp ts = rs.getTimestamp("upload_date");
+        if (ts != null) {
+            doc.setUploadDate(ts.toLocalDateTime());
+        }
+        return doc;
+    };
+
+    private final RowMapper<Document> summaryDocumentRowMapper = (rs, rowNum) -> {
+        Document doc = new Document();
+        doc.setId(rs.getLong("id"));
+        doc.setFilename(rs.getString("filename"));
+        doc.setTitle(rs.getString("title"));
+        doc.setAuthor(rs.getString("author"));
+        doc.setPublicationDate(rs.getString("publication_date"));
+        // No content
         Timestamp ts = rs.getTimestamp("upload_date");
         if (ts != null) {
             doc.setUploadDate(ts.toLocalDateTime());
@@ -39,7 +55,7 @@ public class DocumentRepository {
 
     public Document save(Document document) {
         if (document.getId() == null) {
-            String sql = "INSERT INTO documents (filename, title, author, publication_date, upload_date) VALUES (?, ?, ?, ?, ?)";
+            String sql = "INSERT INTO documents (filename, title, author, publication_date, upload_date, content) VALUES (?, ?, ?, ?, ?, ?)";
             KeyHolder keyHolder = new GeneratedKeyHolder();
 
             jdbcTemplate.update(connection -> {
@@ -49,6 +65,7 @@ public class DocumentRepository {
                 ps.setString(3, document.getAuthor());
                 ps.setString(4, document.getPublicationDate());
                 ps.setTimestamp(5, Timestamp.valueOf(document.getUploadDate()));
+                ps.setString(6, document.getContent());
                 return ps;
             }, keyHolder);
 
@@ -59,21 +76,23 @@ public class DocumentRepository {
                 document.setId(keyHolder.getKey().longValue());
             }
         } else {
-            String sql = "UPDATE documents SET filename = ?, title = ?, author = ?, publication_date = ?, upload_date = ? WHERE id = ?";
+            String sql = "UPDATE documents SET filename = ?, title = ?, author = ?, publication_date = ?, upload_date = ?, content = ? WHERE id = ?";
             jdbcTemplate.update(sql, document.getFilename(), document.getTitle(), document.getAuthor(),
                     document.getPublicationDate(),
                     Timestamp.valueOf(document.getUploadDate()),
+                    document.getContent(),
                     document.getId());
         }
         return document;
     }
 
     public List<Document> findAll() {
-        return jdbcTemplate.query("SELECT * FROM documents", documentRowMapper);
+        return jdbcTemplate.query("SELECT id, filename, title, author, publication_date, upload_date FROM documents",
+                summaryDocumentRowMapper);
     }
 
     public Optional<Document> findById(Long id) {
-        List<Document> result = jdbcTemplate.query("SELECT * FROM documents WHERE id = ?", documentRowMapper, id);
+        List<Document> result = jdbcTemplate.query("SELECT * FROM documents WHERE id = ?", fullDocumentRowMapper, id);
         return result.isEmpty() ? Optional.empty() : Optional.of(result.get(0));
     }
 }

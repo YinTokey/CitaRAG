@@ -17,6 +17,7 @@ public class Document {
     private String author;
     private String publicationDate;
     private LocalDateTime uploadDate = LocalDateTime.now();
+    private String content;
     private Set<Collection> collections = new HashSet<>();
 
     public Document(String filename, String author) {

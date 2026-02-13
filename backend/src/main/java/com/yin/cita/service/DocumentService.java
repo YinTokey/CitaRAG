@@ -89,6 +89,7 @@ public class DocumentService {
         document.setTitle(truncate(title, 255));
         document.setAuthor(truncate(author, 255));
         document.setPublicationDate(truncate(publicationDate, 255));
+        document.setContent(result.getContent()); // Save full content
         document.setUploadDate(LocalDateTime.now());
 
         Document savedDoc = documentRepository.save(document);

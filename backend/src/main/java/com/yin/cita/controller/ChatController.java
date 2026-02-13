@@ -20,7 +20,7 @@ public class ChatController {
         String model = (String) payload.get("model");
 
         org.springframework.web.servlet.mvc.method.annotation.SseEmitter emitter = new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(
-                60000L); // 1 minute timeout
+                300000L); // 5 minutes timeout
 
         if (query == null || query.trim().isEmpty()) {
             try {

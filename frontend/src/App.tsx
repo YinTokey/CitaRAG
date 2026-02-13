@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Box, Paper, TextField, IconButton, Typography, CircularProgress, Button, Collapse, Fade, Menu, MenuItem, ListItemIcon, ListItemText, List, ListItem, Divider, LinearProgress } from '@mui/material';
+import { Box, Paper, TextField, IconButton, Typography, CircularProgress, Button, Collapse, Fade, Menu, MenuItem, ListItemIcon, ListItemText, List, ListItem, Divider, LinearProgress, Tooltip } from '@mui/material';
 import CopyAllIcon from '@mui/icons-material/CopyAll';
 import ThumbUpOutlinedIcon from '@mui/icons-material/ThumbUpOutlined';
 import ArticleOutlinedIcon from '@mui/icons-material/ArticleOutlined';
@@ -8,7 +8,6 @@ import DriveFileRenameOutlineIcon from '@mui/icons-material/DriveFileRenameOutli
 import HistoryIcon from '@mui/icons-material/History';
 import MoreHorizIcon from '@mui/icons-material/MoreHoriz';
 import AddIcon from '@mui/icons-material/Add';
-import LanguageIcon from '@mui/icons-material/Language';
 import CloudUploadOutlinedIcon from '@mui/icons-material/CloudUploadOutlined';
 import LibraryBooksIcon from '@mui/icons-material/LibraryBooks';
 import KeyboardDoubleArrowLeftIcon from '@mui/icons-material/KeyboardDoubleArrowLeft';
@@ -23,6 +22,8 @@ import rehypeKatex from 'rehype-katex';
 
 import CitationList from './components/CitationList';
 import LibraryView from './components/LibraryView';
+import DocumentPreview from './components/DocumentPreview';
+import { Document } from './types';
 import './App.css';
 
 interface Message {
@@ -35,16 +36,16 @@ type ViewState = 'chat' | 'menu' | 'library';
 
 const AVAILABLE_MODELS = [
   {
-    id: 'llama3.2:1b',
-    name: 'LLaMA 3.2 1B',       // ~1.3 GB - fastest
-  },
-  {
-    id: 'gemma2:2b',
-    name: 'Gemma 2 2B',          // ~1.6 GB - good quality/size ratio
+    id: 'gemma3:1b',
+    name: 'Gemma 3 1B'
   },
   {
     id: 'qwen2.5:1.5b',
-    name: 'Qwen 2.5 1.5B',       // ~1 GB - great for the size
+    name: 'Qwen 2.5 1.5B',
+  },
+  {
+    id: 'llama3.2:1b',
+    name: 'LLaMA 3.2 1B',
   },
 ];
 
@@ -56,7 +57,6 @@ function App() {
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isChatting, setIsChatting] = useState(false);
   const [activeCitations, setActiveCitations] = useState<any[]>([]);
-  const [isWebSearch, setIsWebSearch] = useState(false);
   const [plusMenuAnchor, setPlusMenuAnchor] = useState<null | HTMLElement>(null);
   const [headerMenuAnchor, setHeaderMenuAnchor] = useState<null | HTMLElement>(null);
   const [modelMenuAnchor, setModelMenuAnchor] = useState<null | HTMLElement>(null);
@@ -70,6 +70,11 @@ function App() {
 
   // Navigation State
   const [currentView, setCurrentView] = useState<ViewState>('chat');
+
+  // Preview State
+  const [previewDoc, setPreviewDoc] = useState<Document | null>(null);
+  const [previewHighlight, setPreviewHighlight] = useState<string>('');
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
 
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
 
@@ -143,7 +148,6 @@ function App() {
         },
         body: JSON.stringify({
           query: userMsg.text,
-          web_search: isWebSearch,
           model: selectedModel ? selectedModel.id : 'phi3:mini'
         }),
       });
@@ -371,6 +375,134 @@ function App() {
     setActiveCitations([]);
   };
 
+  const handleCitationClick = async (citation: any) => {
+    // 1. Identify Document
+    const filename = citation.metadata?.filename || citation.metadata?.source;
+    if (!filename) return;
+
+    setIsPreviewLoading(true);
+    setPreviewDoc(null);
+    setPreviewHighlight(citation.text);
+
+    try {
+      // 2. Fetch all docs (summary) to find ID
+      const res = await fetch('http://localhost:8080/api/documents');
+      const allDocs: Document[] = await res.json();
+      const found = allDocs.find(d => d.filename === filename);
+
+      if (found) {
+        // 3. Fetch full document content using the ID
+        const fullRes = await fetch(`http://localhost:8080/api/documents/${found.id}`);
+        if (fullRes.ok) {
+          const fullDoc = await fullRes.json();
+          setPreviewDoc(fullDoc);
+        } else {
+          console.error("Failed to fetch full document");
+        }
+      } else {
+        console.warn("Document not found in library:", filename);
+      }
+    } catch (e) {
+      console.error("Failed to load document for preview", e);
+    } finally {
+      setIsPreviewLoading(false);
+    }
+  };
+
+  const renderMessageContent = (msg: Message) => {
+    // Helper to process text and wrap citations
+    const processText = (text: string) => {
+      if (!msg.citations || msg.citations.length === 0) return text;
+
+      const regex = /\(([^)]+?),\s*(\d{4}[a-z]?)\)/g;
+      const parts = [];
+      let lastIndex = 0;
+      let match;
+
+      while ((match = regex.exec(text)) !== null) {
+        if (match.index > lastIndex) {
+          parts.push(text.substring(lastIndex, match.index));
+        }
+
+        const fullMatch = match[0];
+        const author = match[1];
+        const year = match[2];
+
+        // Find matching citation
+        const relevantCitation = msg.citations.find(cit => {
+          const meta = cit.metadata || {};
+          const cAuthor = meta.author || meta.Author || meta.creator || "";
+          const cDate = meta.date || meta.year || meta.publicationDate || meta.created || "";
+
+          if (!cAuthor) return false;
+
+          const authorMatch = cAuthor.toLowerCase().includes(author.split(' ')[0].toLowerCase());
+          const yearMatch = cDate.includes(year);
+
+          return authorMatch; // Prioritize author match
+        });
+
+        if (relevantCitation) {
+          parts.push(
+            <Tooltip key={match.index} title={
+              <Box sx={{ p: 1 }}>
+                <Typography variant="subtitle2" fontWeight="bold" sx={{ color: 'white' }}>{relevantCitation.metadata?.title}</Typography>
+                <Typography variant="caption" sx={{ color: '#ddd' }}>Click to preview</Typography>
+              </Box>
+            } arrow>
+              <span
+                style={{
+                  color: '#4f46e5',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  backgroundColor: 'rgba(79, 70, 229, 0.1)',
+                  padding: '2px 4px',
+                  borderRadius: '4px'
+                }}
+                onClick={() => handleCitationClick(relevantCitation)}
+              >
+                {fullMatch}
+              </span>
+            </Tooltip>
+          );
+        } else {
+          parts.push(fullMatch);
+        }
+
+        lastIndex = regex.lastIndex;
+      }
+
+      if (lastIndex < text.length) {
+        parts.push(text.substring(lastIndex));
+      }
+
+      return parts;
+    };
+
+    return (
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm, remarkMath]}
+        rehypePlugins={[rehypeKatex]}
+        components={{
+          p: ({ children }) => {
+            return <p>{Array.isArray(children) ? children.map((child, i) => {
+              if (typeof child === 'string') return <span key={i}>{processText(child)}</span>;
+              return <span key={i}>{child}</span>;
+            }) : (typeof children === 'string' ? processText(children) : children)}</p>;
+          },
+          li: ({ children }) => {
+            return <li>{Array.isArray(children) ? children.map((child, i) => {
+              if (typeof child === 'string') return <span key={i}>{processText(child)}</span>;
+              return <span key={i}>{child}</span>;
+            }) : (typeof children === 'string' ? processText(children) : children)}</li>;
+          }
+        }}
+      >
+        {msg.text}
+      </ReactMarkdown>
+    );
+  };
+
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', bgcolor: 'transparent', position: 'relative', overflow: 'hidden' }}>
 
@@ -569,12 +701,7 @@ function App() {
                   '& th, & td': { border: '1px solid #ddd', p: 1, textAlign: 'left' },
                   '& th': { bgcolor: '#f8f9fa' }
                 }}>
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm, remarkMath]}
-                    rehypePlugins={[rehypeKatex]}
-                  >
-                    {msg.text}
-                  </ReactMarkdown>
+                  {renderMessageContent(msg)}
                 </Box>
               </Box>
 
@@ -705,17 +832,6 @@ function App() {
                   <AddIcon fontSize="small" />
                 </IconButton>
 
-                <IconButton
-                  size="small"
-                  onClick={() => setIsWebSearch(!isWebSearch)}
-                  sx={{
-                    color: isWebSearch ? 'var(--text-accent)' : 'var(--text-muted)',
-                    bgcolor: isWebSearch ? 'rgba(99, 102, 241, 0.1)' : 'transparent',
-                    '&:hover': { bgcolor: isWebSearch ? 'rgba(99, 102, 241, 0.2)' : 'var(--background-modifier-hover)' }
-                  }}
-                >
-                  <LanguageIcon fontSize="small" />
-                </IconButton>
 
                 <Box
                   onClick={handleModelClick}
@@ -846,6 +962,12 @@ function App() {
 
 
 
+      <DocumentPreview
+        document={previewDoc}
+        highlightText={previewHighlight}
+        isLoading={isPreviewLoading}
+        onClose={() => setPreviewDoc(null)}
+      />
     </Box>
   );
 }

@@ -95,9 +95,13 @@ public class ChatService {
             return;
         }
 
-        // 3. Synthesize Answer using Context
         String context = matches.stream()
-                .map(match -> match.embedded().text())
+                .map(match -> {
+                    Map<String, Object> meta = match.embedded().metadata().toMap();
+                    String title = meta.containsKey("title") ? meta.get("title").toString() : "Unknown Title";
+                    String author = meta.containsKey("author") ? meta.get("author").toString() : "Unknown Author";
+                    return String.format("[Title: %s, Author: %s]\n%s", title, author, match.embedded().text());
+                })
                 .collect(Collectors.joining("\n\n---\n\n"));
 
         String prompt = "You are a helpful research assistant. Use the following context from the user's documents to answer their question.\n\n"
@@ -106,6 +110,9 @@ public class ChatService {
                 "USER QUESTION: " + query + "\n\n" +
                 "INSTRUCTIONS: Provide a concise and accurate answer based ONLY on the provided context. " +
                 "If the context doesn't contain the answer, say you don't know.\n" +
+                "CITATION: You MUST cite your sources using the format (Title, Author) inline. " +
+                "For example: (The Study of Everything, Smith). Do not use numbered citations like [1]. " +
+                "Use the metadata provided in the context blocks to find the Title and Author.\n" +
                 "FORMAT: Use Markdown to structure your response. CRITICAL: Always use a double-newline before starting a list. "
                 +
                 "Each list item MUST start on a new line with a hyphen and a space (e.g., '\\n\\n- Item 1\\n- Item 2'). "
@@ -118,11 +125,18 @@ public class ChatService {
                 .modelName(modelName != null && !modelName.isEmpty() ? modelName : "phi3:mini")
                 .timeout(java.time.Duration.ofSeconds(120))
                 .temperature(0.7) // Good default
+                .numCtx(8192) // Increase context window size
                 .build();
+
+        System.out.println("DEBUG: Generated Prompt (First 500 chars): "
+                + (prompt.length() > 500 ? prompt.substring(0, 500) : prompt));
+
+        StringBuilder fullResponse = new StringBuilder();
 
         streamingModel.generate(prompt, new StreamingResponseHandler<AiMessage>() {
             @Override
             public void onNext(String token) {
+                fullResponse.append(token);
                 try {
                     emitter.send(SseEmitter.event().name("token").data(token));
                 } catch (IOException e) {
@@ -132,11 +146,13 @@ public class ChatService {
 
             @Override
             public void onComplete(Response<AiMessage> response) {
+                System.out.println("DEBUG: Full LLM Response: " + fullResponse.toString());
                 emitter.complete();
             }
 
             @Override
             public void onError(Throwable error) {
+                System.err.println("DEBUG: LLM Generation Error: " + error.getMessage());
                 emitter.completeWithError(error);
             }
         });

@@ -4,7 +4,8 @@ CREATE TABLE IF NOT EXISTS documents (
     title VARCHAR(255),
     author VARCHAR(255),
     publication_date VARCHAR(255),
-    upload_date TIMESTAMP
+    upload_date TIMESTAMP,
+    content TEXT
 );
 
 CREATE TABLE IF NOT EXISTS collections (
@@ -21,3 +22,4 @@ CREATE TABLE IF NOT EXISTS collection_documents (
     FOREIGN KEY (collection_id) REFERENCES collections(id) ON DELETE CASCADE,
     FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
 );
+
