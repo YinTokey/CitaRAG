@@ -3,8 +3,12 @@ package com.yin.cita.controller;
 import com.yin.cita.model.Document;
 import com.yin.cita.service.DocumentService;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.core.io.Resource;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 
 import java.util.List;
 
@@ -41,5 +45,30 @@ public class DocumentController {
         return documentService.getDocumentById(id)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
+    }
+
+    @GetMapping("/{id}/content")
+    public ResponseEntity<Resource> getDocumentContent(@PathVariable Long id) {
+        return documentService.getDocumentById(id)
+                .map(doc -> {
+                    try {
+                        Resource resource = documentService.loadAsResource(doc.getFilename());
+                        String contentType = "application/octet-stream";
+                        if (doc.getFilename().toLowerCase().endsWith(".pdf")) {
+                            contentType = "application/pdf";
+                        } else if (doc.getFilename().toLowerCase().endsWith(".txt")) {
+                            contentType = "text/plain";
+                        }
+
+                        return ResponseEntity.ok()
+                                .contentType(MediaType.parseMediaType(contentType))
+                                .header(HttpHeaders.CONTENT_DISPOSITION,
+                                        "inline; filename=\"" + doc.getFilename() + "\"")
+                                .body(resource);
+                    } catch (Exception e) {
+                        return new ResponseEntity<Resource>(HttpStatus.NOT_FOUND);
+                    }
+                })
+                .orElse(new ResponseEntity<Resource>(HttpStatus.NOT_FOUND));
     }
 }

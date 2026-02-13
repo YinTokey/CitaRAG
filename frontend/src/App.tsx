@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { App as ObsidianApp } from 'obsidian';
 import { Box, Paper, TextField, IconButton, Typography, CircularProgress, Button, Collapse, Fade, Menu, MenuItem, ListItemIcon, ListItemText, List, ListItem, Divider, LinearProgress, Tooltip } from '@mui/material';
 import CopyAllIcon from '@mui/icons-material/CopyAll';
 import ThumbUpOutlinedIcon from '@mui/icons-material/ThumbUpOutlined';
@@ -49,7 +50,13 @@ const AVAILABLE_MODELS = [
   },
 ];
 
-function App() {
+
+
+interface AppProps {
+  app?: ObsidianApp;
+}
+
+function App({ app }: AppProps) {
   const [files, setFiles] = useState<File[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -74,6 +81,7 @@ function App() {
   // Preview State
   const [previewDoc, setPreviewDoc] = useState<Document | null>(null);
   const [previewHighlight, setPreviewHighlight] = useState<string>('');
+  const [previewPage, setPreviewPage] = useState<number>(1);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
 
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
@@ -111,6 +119,27 @@ function App() {
 
   const handleFileUpload = async (file: File) => {
     setIsUploading(true);
+
+    // If running in Obsidian, save a copy to the local plugin folder for preview
+    if (app) {
+      try {
+        const configDir = app.vault.configDir;
+        const targetDir = `${configDir}/plugins/citarag/files`;
+
+        // Ensure directory exists
+        if (!(await app.vault.adapter.exists(targetDir))) {
+          await app.vault.adapter.mkdir(targetDir);
+        }
+
+        const arrayBuffer = await file.arrayBuffer();
+        const targetPath = `${targetDir}/${file.name}`;
+        await app.vault.adapter.writeBinary(targetPath, arrayBuffer);
+        console.log(`Saved file copy to ${targetPath}`);
+      } catch (err) {
+        console.error("Failed to save local file copy for preview", err);
+      }
+    }
+
     const formData = new FormData();
     formData.append('files', file);
 
@@ -384,6 +413,13 @@ function App() {
     setPreviewDoc(null);
     setPreviewHighlight(citation.text);
 
+    // Extract page number if available
+    let page = 1;
+    if (citation.metadata?.page_number) {
+      page = parseInt(citation.metadata.page_number, 10) || 1;
+    }
+    setPreviewPage(page);
+
     try {
       // 2. Fetch all docs (summary) to find ID
       const res = await fetch('http://localhost:8080/api/documents');
@@ -404,6 +440,26 @@ function App() {
       }
     } catch (e) {
       console.error("Failed to load document for preview", e);
+    } finally {
+      setIsPreviewLoading(false);
+    }
+  };
+
+  const handleLibraryPreview = async (doc: Document) => {
+    setIsPreviewLoading(true);
+    setPreviewDoc(null);
+    setPreviewHighlight('');
+    setPreviewPage(1);
+
+    try {
+      // Fetch full doc just in case
+      const fullRes = await fetch(`http://localhost:8080/api/documents/${doc.id}`);
+      if (fullRes.ok) {
+        const fullDoc = await fullRes.json();
+        setPreviewDoc(fullDoc);
+      }
+    } catch (e) {
+      console.error(e);
     } finally {
       setIsPreviewLoading(false);
     }
@@ -926,6 +982,7 @@ function App() {
             isUploading={isUploading}
             isUploadOpen={isUploadOpen}
             setIsUploadOpen={setIsUploadOpen}
+            onPreview={handleLibraryPreview}
           />
         </Box>
       </Fade>
@@ -965,8 +1022,10 @@ function App() {
       <DocumentPreview
         document={previewDoc}
         highlightText={previewHighlight}
+        initialPage={previewPage}
         isLoading={isPreviewLoading}
         onClose={() => setPreviewDoc(null)}
+        app={app}
       />
     </Box>
   );

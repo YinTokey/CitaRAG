@@ -15,6 +15,12 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.net.MalformedURLException;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
 
 @Service
 public class DocumentService {
@@ -25,27 +31,34 @@ public class DocumentService {
     private final VectorStoreService vectorStoreService;
     private final ChunkingService chunkingService;
     private final ObjectMapper objectMapper;
+    private final String uploadDir;
 
     public DocumentService(DocumentRepository documentRepository, CollectionRepository collectionRepository,
             FileParserService fileParserService, VectorStoreService vectorStoreService,
-            ChunkingService chunkingService) {
+            ChunkingService chunkingService,
+            @org.springframework.beans.factory.annotation.Value("${citarag.files.upload-dir:data/uploads}") String uploadDir) {
         this.documentRepository = documentRepository;
         this.collectionRepository = collectionRepository;
         this.fileParserService = fileParserService;
         this.vectorStoreService = vectorStoreService;
         this.chunkingService = chunkingService;
         this.objectMapper = new ObjectMapper();
+        this.uploadDir = uploadDir;
     }
 
     @Transactional
     public Document uploadAndParse(MultipartFile file) throws IOException {
         System.out.println("Processing file: " + file.getOriginalFilename());
 
-        // 1. Parse File to Elements
+        // 1. (NEW) Save Original File to Disk
+        // saveOriginalFile(file); // Disabled per user request (files managed by
+        // plugin)
+
+        // 2. Parse File to Elements
         FileParsingResult result = fileParserService.parseFileToResult(file);
         System.out.println("Parsed " + result.getElements().size() + " elements.");
 
-        // 2. Save Parsed Elements (JSON) for debugging
+        // 3. Save Parsed Elements (JSON) for debugging
         String elementsJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(result.getElements());
         fileParserService.saveToLocal(file.getOriginalFilename(), elementsJson);
 
@@ -146,6 +159,35 @@ public class DocumentService {
                 .orElseThrow(() -> new RuntimeException("Document not found"));
 
         collectionRepository.removeDocument(collectionId, documentId);
+    }
+
+    private void saveOriginalFile(MultipartFile file) throws IOException {
+        Path uploadDirPath = Paths.get(this.uploadDir);
+        if (!Files.exists(uploadDirPath)) {
+            Files.createDirectories(uploadDirPath);
+        }
+
+        String filename = file.getOriginalFilename();
+        if (filename == null)
+            filename = "unknown_" + System.currentTimeMillis();
+
+        Path targetPath = uploadDirPath.resolve(filename);
+        Files.copy(file.getInputStream(), targetPath, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        System.out.println("Saved original file to: " + targetPath.toAbsolutePath());
+    }
+
+    public Resource loadAsResource(String filename) {
+        try {
+            Path file = Paths.get(this.uploadDir).resolve(filename);
+            Resource resource = new UrlResource(file.toUri());
+            if (resource.exists() || resource.isReadable()) {
+                return resource;
+            } else {
+                throw new RuntimeException("Could not read file: " + filename);
+            }
+        } catch (MalformedURLException e) {
+            throw new RuntimeException("Could not read file: " + filename, e);
+        }
     }
 
     private String truncate(String value, int length) {

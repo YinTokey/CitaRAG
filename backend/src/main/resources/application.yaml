@@ -1,6 +1,7 @@
 spring:
   application:
     name: cita
+
   mvc:
     async:
       request-timeout: 3600000 # 60 minutes

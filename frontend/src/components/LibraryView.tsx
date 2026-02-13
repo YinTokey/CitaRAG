@@ -20,9 +20,10 @@ interface LibraryViewProps {
     isUploading: boolean;
     isUploadOpen: boolean;
     setIsUploadOpen: (open: boolean) => void;
+    onPreview: (doc: Document) => void;
 }
 
-const LibraryView: React.FC<LibraryViewProps> = ({ onUpload, onBack, isUploading, isUploadOpen, setIsUploadOpen }) => {
+const LibraryView: React.FC<LibraryViewProps> = ({ onUpload, onBack, isUploading, isUploadOpen, setIsUploadOpen, onPreview }) => {
     const [tabIndex, setTabIndex] = useState(0);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [searchQuery, setSearchQuery] = useState('');
@@ -305,6 +306,18 @@ const LibraryView: React.FC<LibraryViewProps> = ({ onUpload, onBack, isUploading
                                                     }}
                                                 >
                                                     Add to collection
+                                                </Button>
+                                                <Button
+                                                    size="small"
+                                                    onClick={() => onPreview(doc)}
+                                                    sx={{
+                                                        textTransform: 'none',
+                                                        color: 'var(--text-accent)',
+                                                        ml: 1,
+                                                        fontSize: '0.7rem'
+                                                    }}
+                                                >
+                                                    Preview
                                                 </Button>
                                             </Box>
                                         </Box>

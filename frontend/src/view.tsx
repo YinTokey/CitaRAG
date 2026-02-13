@@ -28,7 +28,9 @@ export class CitaRAGView extends ItemView {
         this.root = createRoot(container);
         this.root.render(
             <React.StrictMode>
-                <App />
+                <React.StrictMode>
+                    <App app={this.app} />
+                </React.StrictMode>
             </React.StrictMode>
         );
     }
