@@ -24,6 +24,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.Arrays;
 
 @Service
 public class FileParserService {
@@ -113,7 +114,169 @@ public class FileParserService {
             }
         }
 
+        // 3. Enhanced Metadata Extraction
+        String title = extractTitle(metadata, docElements, filename);
+        String author = extractAuthor(metadata, docElements);
+
+        extractedMetadata.put("title", title);
+        extractedMetadata.put("author", author);
+
         return new FileParsingResult(docElements, extractedMetadata, fullText);
+    }
+
+    String extractTitle(Metadata metadata, List<DocumentElement> elements, String filename) {
+        // Layer 1: Metadata
+        String title = metadata.get("title");
+        if (title == null || title.isEmpty()) {
+            title = metadata.get("dc:title");
+        }
+
+        if (title != null && !title.trim().isEmpty()) {
+            // Validate metadata title isn't just a filename or empty
+            String cleanT = cleanTitle(title);
+            if (isValidTitle(cleanT)) {
+                return cleanT;
+            }
+        }
+
+        // Layer 2: Heuristics (First TITLE element which usually corresponds to H1/H2)
+        for (DocumentElement el : elements) {
+            String content = el.getText();
+            if (el.getType() == DocumentElement.Type.TITLE) {
+                String cleanContent = cleanTitle(content);
+                if (isValidTitle(cleanContent)) {
+                    return cleanContent;
+                }
+            }
+        }
+
+        // Fallback: First substantial text block (likely P if no H tags)
+        for (DocumentElement el : elements) {
+            if (el.getType() == DocumentElement.Type.NARRATIVE_TEXT) {
+                String content = el.getText();
+                if (content.length() > 5 && content.length() < 150) { // Reasonable title length
+                    String cleanContent = cleanTitle(content);
+                    if (isValidTitle(cleanContent)) {
+                        return cleanContent;
+                    }
+                }
+            }
+        }
+
+        return filename;
+    }
+
+    String extractAuthor(Metadata metadata, List<DocumentElement> elements) {
+        // Layer 1: Metadata
+        String author = metadata.get("Author");
+        if (author == null || author.isEmpty()) {
+            author = metadata.get("creator");
+        }
+        if (author == null || author.isEmpty()) {
+            author = metadata.get("dc:creator");
+        }
+        if (author == null || author.isEmpty()) {
+            author = metadata.get("meta:author");
+        }
+
+        if (author != null && !author.trim().isEmpty()) {
+            if (isValidAuthor(author)) {
+                return author.trim();
+            }
+            // Try split, but for simplicity return if at least one looks valid
+            String[] candidates = author.split(";| |,");
+            boolean hasValid = false;
+            for (String candidate : candidates) {
+                if (isValidAuthor(candidate.trim())) {
+                    hasValid = true;
+                    break;
+                }
+            }
+            if (hasValid)
+                return author.trim();
+        }
+
+        // Layer 2: Heuristics - Look for text near start
+        int linesChecked = 0;
+
+        for (DocumentElement el : elements) {
+            String content = el.getText().trim();
+            if (content.isEmpty())
+                continue;
+
+            if (el.getType() == DocumentElement.Type.TITLE) {
+                linesChecked++;
+                continue;
+            }
+
+            // Check first 10 text blocks
+            if (linesChecked < 10) {
+                // 1. "By [Name]"
+                if (content.toLowerCase().startsWith("by ")) {
+                    String potentialAuthor = content.substring(3).trim();
+                    if (isValidAuthor(potentialAuthor))
+                        return potentialAuthor;
+                }
+
+                // 2. Just a name
+                if (isValidAuthor(content)) {
+                    return content;
+                }
+
+                linesChecked++;
+            }
+        }
+
+        return "Unknown Author";
+    }
+
+    String cleanTitle(String rawTitle) {
+        if (rawTitle == null)
+            return "";
+        String title = rawTitle.trim();
+        // Remove common prefixes
+        title = title.replaceAll("^(?i)(Title:|Subject:)\\s*", "");
+        // Remove file extensions
+        title = title.replaceAll("(?i)\\.(pdf|docx|doc|txt)$", "");
+        return title.trim();
+    }
+
+    boolean isValidTitle(String title) {
+        if (title == null || title.isEmpty())
+            return false;
+        if (title.length() < 3)
+            return false;
+        if (title.equalsIgnoreCase("untitled"))
+            return false;
+        if (title.toLowerCase().startsWith("microsoft word"))
+            return false;
+        return true;
+    }
+
+    boolean isValidAuthor(String name) {
+        if (name == null || name.isEmpty())
+            return false;
+        name = name.trim();
+
+        if (name.length() < 3 || name.length() > 50)
+            return false;
+        if (name.matches(".*\\d.*"))
+            return false;
+        if (name.equalsIgnoreCase("unknown"))
+            return false;
+
+        // Check for common non-name words
+        String lower = name.toLowerCase();
+        List<String> invalidWords = Arrays.asList("introduction", "abstract", "chapter", "page", "university",
+                "department", "school", "faculty", "submitted", "thesis");
+        for (String word : invalidWords) {
+            if (lower.contains(word))
+                return false;
+        }
+
+        // Regex: Start with Capital, reasonable chars
+        return name.matches("^[A-Z][a-zA-Z.\\-']+(?:\\s+[A-Z][a-zA-Z.\\-']+){1,3}$");
+
     }
 
     private void processElement(Element element, List<DocumentElement> docElements, String filename, int pageNumber,
