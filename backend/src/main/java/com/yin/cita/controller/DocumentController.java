@@ -25,9 +25,16 @@ public class DocumentController {
     @PostMapping("/upload")
     public ResponseEntity<Document> uploadDocument(@RequestParam("file") MultipartFile file) {
         try {
-            Document document = documentService.uploadAndParse(file);
+            // 1. Sync: Save file & create DB record
+            Document document = documentService.initiateUpload(file);
+
+            // 2. Async: Trigger heavy processing
+            documentService.processDocumentAsync(document.getId());
+
+            // 3. Return immediately
             return ResponseEntity.ok(document);
         } catch (Exception e) {
+            e.printStackTrace();
             return ResponseEntity.badRequest().build();
         }
     }

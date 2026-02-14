@@ -37,7 +37,7 @@ interface UploadItem {
   id: string;
   file: File;
   progress: number;
-  status: 'pending' | 'uploading' | 'completed' | 'error';
+  status: 'pending' | 'uploading' | 'processing' | 'completed' | 'error';
   error?: string;
 }
 
@@ -127,13 +127,68 @@ function App({ app }: AppProps) {
     checkModels();
   }, []);
 
-  // Queue processing effect
+  // Polling Effect
   useEffect(() => {
-    const pending = uploadQueue.find(item => item.status === 'pending');
-    const uploading = uploadQueue.find(item => item.status === 'uploading');
+    const interval = setInterval(async () => {
+      const processingItems = uploadQueue.filter(item => item.status === 'processing');
+      if (processingItems.length === 0) return;
 
-    if (pending && !uploading) {
-      performUpload(pending);
+      const updatedQueue = [...uploadQueue];
+      let hasChanges = false;
+
+      for (const item of processingItems) {
+        try {
+          const res = await fetch(`http://localhost:8080/api/documents/${item.id}`);
+          if (res.ok) {
+            const doc = await res.json();
+            // Backend status: PENDING, PROCESSING, COMPLETED, FAILED
+            const status = doc.processingStatus?.toLowerCase() || 'pending';
+
+            if (status === 'completed') {
+              const index = updatedQueue.findIndex(i => i.id === item.id);
+              if (index !== -1) {
+                updatedQueue[index] = { ...updatedQueue[index], status: 'completed', progress: 100 };
+                hasChanges = true;
+              }
+            } else if (status === 'failed') {
+              const index = updatedQueue.findIndex(i => i.id === item.id);
+              if (index !== -1) {
+                updatedQueue[index] = { ...updatedQueue[index], status: 'error', error: doc.errorMessage || 'Processing failed' };
+                hasChanges = true;
+              }
+            } else {
+              // Update Progress
+              const backendProgress = doc.processingProgress || 0;
+              const index = updatedQueue.findIndex(i => i.id === item.id);
+              if (index !== -1 && updatedQueue[index].progress !== backendProgress) {
+                updatedQueue[index] = { ...updatedQueue[index], progress: backendProgress };
+                hasChanges = true;
+              }
+            }
+          }
+        } catch (e) {
+          console.error("Polling error", e);
+        }
+      }
+
+      if (hasChanges) {
+        setUploadQueue(updatedQueue);
+      }
+
+    }, 1000); // Poll every 1 second
+
+    return () => clearInterval(interval);
+  }, [uploadQueue]);
+
+  // Queue processing effect (Initiator)
+  useEffect(() => {
+    const pending = uploadQueue.filter(item => item.status === 'pending');
+    const uploading = uploadQueue.filter(item => item.status === 'uploading');
+
+    // Allow up to 3 concurrent network uploads
+    if (pending.length > 0 && uploading.length < 3) {
+      const toUpload = pending.slice(0, 3 - uploading.length);
+      toUpload.forEach(item => performUpload(item));
     }
   }, [uploadQueue]);
 
@@ -179,21 +234,30 @@ function App({ app }: AppProps) {
         }
       }
 
-      // Update progress before backend upload
+      // Backend Upload
+      const formData = new FormData();
+      formData.append('file', file); // Backend expects 'file'
+
+      // Progress simulation for network upload
       setUploadQueue(prev => prev.map(i => i.id === item.id ? { ...i, progress: 60 } : i));
 
-      const formData = new FormData();
-      formData.append('files', file); // Backend expects 'files' part name
-
-      const response = await fetch('http://localhost:8080/api/upload', {
+      const response = await fetch('http://localhost:8080/api/documents/upload', {
         method: 'POST',
         body: formData,
       });
 
       if (response.ok) {
-        // Success
-        setUploadQueue(prev => prev.map(i => i.id === item.id ? { ...i, status: 'completed', progress: 100 } : i));
-        setFiles((prev) => [...prev, file]);
+        const doc = await response.json();
+        // Success - network upload done. Now waiting for processing.
+        // We use the returned ID for polling.
+        // Update item ID to match backend ID for polling?
+        // Current item.id is random string. We should store backend ID.
+        // But we used item.id as key.
+        // Let's update the item to store the meaningful ID or just replace it?
+        // Replacing ID might break keys if used in map. 
+        // Let's just update the ID in the queue object to match backend ID 
+        setUploadQueue(prev => prev.map(i => i.id === item.id ? { ...i, id: doc.id.toString(), status: 'processing', progress: 5 } : i));
+
       } else {
         throw new Error('Upload failed');
       }

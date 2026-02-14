@@ -19,7 +19,7 @@ interface UploadItem {
     id: string;
     file: File;
     progress: number;
-    status: 'pending' | 'uploading' | 'completed' | 'error';
+    status: 'pending' | 'uploading' | 'processing' | 'completed' | 'error';
     error?: string;
 }
 
@@ -57,6 +57,16 @@ const LibraryView: React.FC<LibraryViewProps> = ({ onUpload, onBack, isUploading
     useEffect(() => {
         fetchData();
     }, []);
+
+    // Refresh library when items complete
+    const prevCompletedCount = useRef(0);
+    useEffect(() => {
+        const completedCount = uploadQueue.filter(i => i.status === 'completed').length;
+        if (completedCount > prevCompletedCount.current) {
+            fetchData();
+        }
+        prevCompletedCount.current = completedCount;
+    }, [uploadQueue]);
 
     const fetchData = async () => {
         setIsLoadingData(true);
@@ -414,7 +424,7 @@ const LibraryView: React.FC<LibraryViewProps> = ({ onUpload, onBack, isUploading
                                             {item.status === 'completed' && <CheckIcon color="success" fontSize="small" />}
                                             {item.status === 'error' && <CloseIcon color="error" fontSize="small" />}
                                             <Typography variant="caption" color={item.status === 'error' ? 'error' : 'textSecondary'}>
-                                                {item.status === 'uploading' ? `${item.progress}%` : item.status}
+                                                {(item.status === 'uploading' || item.status === 'processing') ? `${item.status} (${item.progress}%)` : item.status}
                                             </Typography>
                                         </Box>
                                     </Box>

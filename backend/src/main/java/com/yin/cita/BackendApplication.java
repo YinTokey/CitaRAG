@@ -23,14 +23,5 @@ public class BackendApplication {
         SpringApplication.run(BackendApplication.class, args);
     }
 
-    @Bean
-    public Executor taskExecutor() {
-        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        executor.setCorePoolSize(5);
-        executor.setMaxPoolSize(10);
-        executor.setQueueCapacity(500);
-        executor.setThreadNamePrefix("CitaAsync-");
-        executor.initialize();
-        return executor;
-    }
+    // taskExecutor bean removed; now defined in AsyncConfig.java
 }

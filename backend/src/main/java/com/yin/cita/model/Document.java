@@ -19,6 +19,9 @@ public class Document {
     private LocalDateTime uploadDate = LocalDateTime.now();
     private String content;
     private String fileHash;
+    private String processingStatus = "PENDING"; // PENDING, PROCESSING, COMPLETED, FAILED
+    private int processingProgress = 0; // 0-100
+    private String errorMessage;
     private Set<Collection> collections = new HashSet<>();
 
     public Document(String filename, String author) {

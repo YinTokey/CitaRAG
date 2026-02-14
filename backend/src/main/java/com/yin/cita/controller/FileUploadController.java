@@ -36,10 +36,11 @@ public class FileUploadController {
             try {
                 // Delegate to DocumentService which handles:
                 // 1. Parsing, 2. Chunking, 3. Vector Storage, 4. DB Persistence
-                Document savedDoc = documentService.uploadAndParse(file);
+                Document savedDoc = documentService.initiateUpload(file);
+                documentService.processDocumentAsync(savedDoc.getId());
 
                 resultLog.append("- ").append(file.getOriginalFilename())
-                        .append(": Success (ID: ").append(savedDoc.getId()).append(")\n");
+                        .append(": Accepted (ID: ").append(savedDoc.getId()).append(")\n");
                 successCount++;
 
             } catch (Exception e) {

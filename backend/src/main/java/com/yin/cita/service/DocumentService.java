@@ -35,6 +35,8 @@ public class DocumentService {
     private final ObjectMapper objectMapper;
     private final String uploadDir;
 
+    private final Map<Long, Document> processingCache = new java.util.concurrent.ConcurrentHashMap<>();
+
     public DocumentService(DocumentRepository documentRepository, CollectionRepository collectionRepository,
             FileParserService fileParserService, VectorStoreService vectorStoreService,
             ChunkingService chunkingService,
@@ -49,90 +51,173 @@ public class DocumentService {
     }
 
     @Transactional
-    public Document uploadAndParse(MultipartFile file) throws IOException {
-        System.out.println("Processing file: " + file.getOriginalFilename());
+    public Document initiateUpload(MultipartFile file) throws IOException {
+        System.out.println("Initiating upload for: " + file.getOriginalFilename());
 
-        // 0. Calculate Hash to prevent duplicates
+        // 0. Calculate Hash
         String fileHash = calculateFileHash(file);
         Optional<Document> existingDoc = documentRepository.findByFileHash(fileHash);
         if (existingDoc.isPresent()) {
-            System.out.println("Document with hash " + fileHash + " already exists. Returning existing document.");
+            System.out.println("Document with hash " + fileHash + " already exists.");
             return existingDoc.get();
         }
 
-        // 1. (NEW) Save Original File to Disk
-        // saveOriginalFile(file); // Disabled per user request (files managed by
-        // plugin)
+        // 1. Save Original File to Disk (Synchronous)
+        Path savedFilePath = saveOriginalFileInternal(file);
+        System.out.println("File saved to: " + savedFilePath.toString());
 
-        // 2. Parse File to Elements
-        FileParsingResult result = fileParserService.parseFileToResult(file);
-        System.out.println("Parsed " + result.getElements().size() + " elements.");
-
-        // 3. Save Parsed Elements (JSON) for debugging
-        String elementsJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(result.getElements());
-        fileParserService.saveToLocal(file.getOriginalFilename(), elementsJson);
-
-        // 3. Chunk Elements (using ChunkingService with context-aware chunking)
-        List<Map<String, Object>> chunks = chunkingService.chunkElements(result.getElements());
-        System.out.println("Generated " + chunks.size() + " chunks.");
-
-        // 4. Save Chunks (JSON) for debugging
-        chunkingService.saveChunks(file.getOriginalFilename(), chunks);
-
-        // 5. Store in Vector Store (Milvus)
-        vectorStoreService.storeChunks(chunks);
-
-        // 6. Extract document-level metadata
-        String title = null;
-        String author = null;
-        String publicationDate = null;
-
-        // Fallback to Tika / Heuristics
-        Map<String, String> metadata = result.getMetadata();
-        author = metadata.get("Author");
-        if (author == null)
-            author = metadata.get("creator");
-        if (author == null)
-            author = "Unknown";
-
-        title = metadata.get("title");
-        if (title == null || title.isEmpty()) {
-            title = file.getOriginalFilename();
-        }
-
-        publicationDate = metadata.get("Creation-Date");
-        if (publicationDate == null)
-            publicationDate = metadata.get("date");
-        if (publicationDate == null)
-            publicationDate = metadata.get("created");
-
-        // 7. Persist Document entity to PostgreSQL
+        // 2. Create Initial Document Record
         Document document = new Document();
         document.setFilename(truncate(file.getOriginalFilename(), 255));
-        document.setTitle(truncate(title, 255));
-        document.setAuthor(truncate(author, 255));
-        document.setPublicationDate(truncate(publicationDate, 255));
-        document.setContent(result.getContent()); // Save full content
         document.setFileHash(fileHash);
         document.setUploadDate(LocalDateTime.now());
+        document.setProcessingStatus("PENDING"); // Only in memory/DTO initially
+        document.setProcessingProgress(0);
 
-        Document savedDoc = documentRepository.save(document);
+        Document savedDoc = documentRepository.save(document); // Doesn't save status to DB anymore
 
-        System.out.println(
-                "Persisted document in PostgreSQL: " + savedDoc.getFilename() + " (ID: " + savedDoc.getId() + ")");
+        // Add to cache immediately
+        savedDoc.setProcessingStatus("PENDING");
+        savedDoc.setProcessingProgress(0);
+        processingCache.put(savedDoc.getId(), savedDoc);
 
         return savedDoc;
     }
 
+    @org.springframework.scheduling.annotation.Async("taskExecutor")
+    public void processDocumentAsync(Long documentId) {
+        System.out.println("Async processing started for document ID: " + documentId + " on thread "
+                + Thread.currentThread().getName());
+
+        // Retrieve from cache first to update transient state
+        Document document = processingCache.get(documentId);
+        if (document == null) {
+            Optional<Document> docOpt = documentRepository.findById(documentId);
+            if (docOpt.isEmpty())
+                return;
+            document = docOpt.get();
+            // Put in cache if missing (e.g. on restart recovery, though transient state is
+            // lost)
+            processingCache.put(documentId, document);
+        }
+
+        updateProgress(document, "PROCESSING", 10); // Started
+
+        try {
+            // Reconstruct path
+            Path uploadDirPath = Paths.get(this.uploadDir);
+            Path filePath = uploadDirPath.resolve(document.getFilename());
+
+            // 2. Parse File
+            FileParsingResult result = fileParserService.parseFileToResult(filePath);
+
+            updateProgress(document, "PROCESSING", 30); // Parsed
+
+            // 3. Chunking
+            List<Map<String, Object>> chunks = chunkingService.chunkElements(result.getElements());
+
+            updateProgress(document, "PROCESSING", 50); // Chunked
+
+            // 4. Store in Vector Store
+            vectorStoreService.storeChunks(chunks);
+
+            updateProgress(document, "PROCESSING", 80); // Embedded
+
+            // 5. Extract Metadata
+            Map<String, String> metadata = result.getMetadata();
+            String title = metadata.get("title");
+            if (title == null || title.isEmpty())
+                title = document.getFilename();
+
+            String author = metadata.get("Author");
+            if (author == null)
+                author = metadata.get("creator");
+            if (author == null)
+                author = "Unknown";
+
+            String pubDate = metadata.get("Creation-Date");
+
+            // 6. Update Document (Core fields only)
+            document.setTitle(truncate(title, 255));
+            document.setAuthor(truncate(author, 255));
+            document.setPublicationDate(truncate(pubDate, 255));
+            document.setContent(result.getContent());
+
+            updateProgress(document, "COMPLETED", 100);
+
+            // Save persistent fields to DB
+            documentRepository.save(document);
+            System.out.println("Async processing completed for doc ID: " + documentId);
+
+            // Allow cache to hold completed state for a bit? Or remove?
+            // User wants polling to see 'completed'. Keep in cache.
+            // On restart, cache is cleared, but content != null implies completed.
+
+        } catch (Exception e) {
+            System.err.println("Error processing document " + documentId + ": " + e.getMessage());
+            e.printStackTrace();
+            updateProgress(document, "FAILED", 0);
+            document.setErrorMessage(e.getMessage());
+            // Don't save error to DB (per user request)
+        }
+    }
+
+    private void updateProgress(Document doc, String status, int progress) {
+        doc.setProcessingStatus(status);
+        doc.setProcessingProgress(progress);
+        // Map updates by reference or put again
+        processingCache.put(doc.getId(), doc);
+    }
+
+    // Support method used by initiateUpload
+    private Path saveOriginalFileInternal(MultipartFile file) throws IOException {
+        Path uploadDirPath = Paths.get(this.uploadDir);
+        if (!Files.exists(uploadDirPath)) {
+            Files.createDirectories(uploadDirPath);
+        }
+        String filename = file.getOriginalFilename();
+        if (filename == null)
+            filename = "unknown_" + System.currentTimeMillis();
+        Path targetPath = uploadDirPath.resolve(filename);
+        Files.copy(file.getInputStream(), targetPath, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        return targetPath;
+    }
+
     public List<Document> getAllDocuments() {
-        System.out.println("Service: Requesting all documents from repository...");
+        // Merge DB results with Cache Status
         List<Document> all = documentRepository.findAll();
-        System.out.println("Service: Repository returned " + all.size() + " documents.");
+        for (Document doc : all) {
+            overlayStatus(doc);
+        }
         return all;
     }
 
     public Optional<Document> getDocumentById(Long id) {
-        return documentRepository.findById(id);
+        Optional<Document> docOpt = documentRepository.findById(id);
+        docOpt.ifPresent(this::overlayStatus);
+        return docOpt;
+    }
+
+    private void overlayStatus(Document doc) {
+        if (processingCache.containsKey(doc.getId())) {
+            Document cached = processingCache.get(doc.getId());
+            doc.setProcessingStatus(cached.getProcessingStatus());
+            doc.setProcessingProgress(cached.getProcessingProgress());
+            doc.setErrorMessage(cached.getErrorMessage());
+        } else {
+            // Infer status if not in cache (e.g. after restart)
+            if (doc.getContent() != null && !doc.getContent().isEmpty()) {
+                doc.setProcessingStatus("COMPLETED");
+                doc.setProcessingProgress(100);
+            } else {
+                // No content and not in cache -> Failed or abandoned?
+                // Or just "Pending" if we assume it might restart?
+                // Let's call it "FAILED" or "PENDING".
+                // Since we don't store "Processing", if it's not in cache/content, it's
+                // inactive.
+                doc.setProcessingStatus("PENDING");
+            }
+        }
     }
 
     @Transactional

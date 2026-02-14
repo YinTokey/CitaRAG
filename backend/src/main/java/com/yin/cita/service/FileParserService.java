@@ -25,6 +25,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.Arrays;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 @Service
 public class FileParserService {
@@ -39,12 +41,22 @@ public class FileParserService {
     // Controller too.
 
     public FileParsingResult parseFileToResult(MultipartFile file) throws IOException {
-        String filename = file.getOriginalFilename();
-        if (filename == null)
-            filename = "unknown";
+        // Adapt MultipartFile to simple input stream processing or use Path if saved?
+        // Current implementation likely uses Tika which accepts InputStream.
+        return parseInputStreamToResult(file.getInputStream(), file.getOriginalFilename());
+    }
 
+    public FileParsingResult parseFileToResult(Path path) throws IOException {
+        try (InputStream is = Files.newInputStream(path)) {
+            return parseInputStreamToResult(is, path.getFileName().toString());
+        }
+    }
+
+    // Rename/Extract the core logic to this method
+    private FileParsingResult parseInputStreamToResult(InputStream inputStream, String filename)
+            throws IOException {
         try {
-            return parseToResult(file.getInputStream(), filename);
+            return parseToResult(inputStream, filename);
         } catch (TikaException | SAXException e) {
             throw new IOException("Failed to parse file: " + e.getMessage(), e);
         }
