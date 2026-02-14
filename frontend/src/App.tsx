@@ -33,6 +33,14 @@ interface Message {
   citations?: any[];
 }
 
+interface UploadItem {
+  id: string;
+  file: File;
+  progress: number;
+  status: 'pending' | 'uploading' | 'completed' | 'error';
+  error?: string;
+}
+
 type ViewState = 'chat' | 'menu' | 'library';
 
 const AVAILABLE_MODELS = [
@@ -60,7 +68,9 @@ function App({ app }: AppProps) {
   const [files, setFiles] = useState<File[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
-  const [isUploading, setIsUploading] = useState(false);
+
+  // Upload State
+  const [uploadQueue, setUploadQueue] = useState<UploadItem[]>([]);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isChatting, setIsChatting] = useState(false);
   const [activeCitations, setActiveCitations] = useState<any[]>([]);
@@ -117,48 +127,90 @@ function App({ app }: AppProps) {
     checkModels();
   }, []);
 
-  const handleFileUpload = async (file: File) => {
-    setIsUploading(true);
+  // Queue processing effect
+  useEffect(() => {
+    const pending = uploadQueue.find(item => item.status === 'pending');
+    const uploading = uploadQueue.find(item => item.status === 'uploading');
 
-    // If running in Obsidian, save a copy to the local plugin folder for preview
-    if (app) {
-      try {
-        const configDir = app.vault.configDir;
-        const targetDir = `${configDir}/plugins/citarag/files`;
-
-        // Ensure directory exists
-        if (!(await app.vault.adapter.exists(targetDir))) {
-          await app.vault.adapter.mkdir(targetDir);
-        }
-
-        const arrayBuffer = await file.arrayBuffer();
-        const targetPath = `${targetDir}/${file.name}`;
-        await app.vault.adapter.writeBinary(targetPath, arrayBuffer);
-        console.log(`Saved file copy to ${targetPath}`);
-      } catch (err) {
-        console.error("Failed to save local file copy for preview", err);
-      }
+    if (pending && !uploading) {
+      performUpload(pending);
     }
+  }, [uploadQueue]);
 
-    const formData = new FormData();
-    formData.append('files', file);
+  const performUpload = async (item: UploadItem) => {
+    const file = item.file;
+
+    // Update status to uploading
+    setUploadQueue(prev => prev.map(i => i.id === item.id ? { ...i, status: 'uploading', progress: 10 } : i));
 
     try {
+      // If running in Obsidian, save a copy to the local plugin folder for preview
+      if (app) {
+        try {
+          const configDir = app.vault.configDir;
+          const targetDir = `${configDir}/plugins/citarag/files`;
+
+          // Ensure directory exists
+          if (!(await app.vault.adapter.exists(targetDir))) {
+            await app.vault.adapter.mkdir(targetDir);
+          }
+
+          // Update progress
+          setUploadQueue(prev => prev.map(i => i.id === item.id ? { ...i, progress: 30 } : i));
+
+          const arrayBuffer = await file.arrayBuffer();
+          const targetPath = `${targetDir}/${file.name}`;
+          await app.vault.adapter.writeBinary(targetPath, arrayBuffer);
+          console.log(`Saved file copy to ${targetPath}`);
+
+          // Delete source file
+          try {
+            const fs = (window as any).require('fs');
+
+            // Dynamic path injected by esbuild
+            let rootDir = '';
+            // @ts-ignore
+          } catch (delErr) {
+            console.warn("Could not delete source file:", delErr);
+          };
+
+        } catch (err) {
+          console.error("Failed to save local file copy for preview", err);
+        }
+      }
+
+      // Update progress before backend upload
+      setUploadQueue(prev => prev.map(i => i.id === item.id ? { ...i, progress: 60 } : i));
+
+      const formData = new FormData();
+      formData.append('files', file); // Backend expects 'files' part name
+
       const response = await fetch('http://localhost:8080/api/upload', {
         method: 'POST',
         body: formData,
       });
 
       if (response.ok) {
+        // Success
+        setUploadQueue(prev => prev.map(i => i.id === item.id ? { ...i, status: 'completed', progress: 100 } : i));
         setFiles((prev) => [...prev, file]);
       } else {
-        console.error('File upload failed');
+        throw new Error('Upload failed');
       }
     } catch (error) {
       console.error('Error uploading file:', error);
-    } finally {
-      setIsUploading(false);
+      setUploadQueue(prev => prev.map(i => i.id === item.id ? { ...i, status: 'error', error: 'Upload failed' } : i));
     }
+  };
+
+  const handleFileUpload = (newFiles: File[]) => {
+    const newItems: UploadItem[] = newFiles.map(f => ({
+      id: Math.random().toString(36).substr(2, 9),
+      file: f,
+      progress: 0,
+      status: 'pending'
+    }));
+    setUploadQueue(prev => [...prev, ...newItems]);
   };
 
   const handleSendMessage = async () => {
@@ -700,7 +752,7 @@ function App({ app }: AppProps) {
         visibility: currentView === 'chat' ? 'visible' : 'hidden'
       }}>
         {/* 1. Scrollable Chat Area */}
-        <Box sx={{ flexGrow: 1, p: 2, overflowY: 'auto', pb: 24, pt: 8 }}>
+        <Box sx={{ flexGrow: 1, p: 2, overflowY: 'auto', pt: 8, display: 'flex', flexDirection: 'column' }}>
           {messages.length === 0 && (
             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', flexDirection: 'column', opacity: 0.6 }}>
               <Box sx={{ mb: 2, p: 2, borderRadius: '50%', bgcolor: 'var(--background-modifier-form-field)' }}>
@@ -800,27 +852,17 @@ function App({ app }: AppProps) {
             </Box>
           ))}
 
-          {isChatting && (
-            <Box sx={{ display: 'flex', mb: 3 }}>
-              <CircularProgress size={16} sx={{ color: 'var(--text-accent)' }} />
-            </Box>
-          )}
+          {/* Upload Queue Progress */}
+
+
           <div ref={messagesEndRef} />
         </Box>
 
-        {/* 2. Floating Input Card Area */}
-        <Box sx={{
-          position: 'absolute',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          p: 2,
-          background: 'linear-gradient(to top, var(--background-primary) 80%, transparent)'
-        }}>
-
+        {/* 2. Fixed Bottom Input Area */}
+        <Box sx={{ p: 2, pt: 0, bgcolor: 'transparent', width: '100%', maxWidth: '900px', mx: 'auto' }}>
           <Collapse in={activeCitations.length > 0}>
             <Box sx={{
-              mb: 2,
+              mb: 1,
               maxHeight: '30vh',
               overflowY: 'auto',
               bgcolor: 'var(--background-secondary)',
@@ -978,8 +1020,10 @@ function App({ app }: AppProps) {
         }}>
           <LibraryView
             onUpload={handleFileUpload}
-            onBack={() => setCurrentView('chat')} // Back to chat
-            isUploading={isUploading}
+            onBack={() => setCurrentView('chat')}
+            isUploading={uploadQueue.some(item => item.status === 'uploading')}
+            uploadQueue={uploadQueue}
+            onClearQueue={() => setUploadQueue([])}
             isUploadOpen={isUploadOpen}
             setIsUploadOpen={setIsUploadOpen}
             onPreview={handleLibraryPreview}

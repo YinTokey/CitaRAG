@@ -4,7 +4,7 @@ import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import InsertDriveFileIcon from '@mui/icons-material/InsertDriveFile';
 
 interface UploadSectionProps {
-    onFileUpload: (file: File) => void;
+    onFileUpload: (files: File[]) => void;
     uploadedFiles: File[];
     isUploading: boolean;
 }
@@ -13,9 +13,10 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onFileUpload, uploadedFil
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        if (file) {
-            onFileUpload(file);
+        const fileList = event.target.files;
+        if (fileList && fileList.length > 0) {
+            const filesArray = Array.from(fileList);
+            onFileUpload(filesArray);
             event.target.value = '';
         }
     };
@@ -45,6 +46,7 @@ const UploadSection: React.FC<UploadSectionProps> = ({ onFileUpload, uploadedFil
             </Box>
             <input
                 type="file"
+                multiple
                 ref={fileInputRef}
                 style={{ display: 'none' }}
                 onChange={handleFileChange}

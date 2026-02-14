@@ -1,9 +1,10 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Box, Typography, Button, IconButton, Tab, Tabs, TextField, InputAdornment, Dialog, DialogTitle, DialogContent, Fade, Chip, CircularProgress, Backdrop, DialogActions, List, ListItem, ListItemButton, ListItemText } from '@mui/material';
+import { Box, Typography, Button, IconButton, Tab, Tabs, TextField, InputAdornment, Dialog, DialogTitle, DialogContent, Fade, Chip, CircularProgress, Backdrop, DialogActions, List, ListItem, ListItemButton, ListItemText, LinearProgress } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import CloudUploadOutlinedIcon from '@mui/icons-material/CloudUploadOutlined';
 import SearchIcon from '@mui/icons-material/Search';
 import CloseIcon from '@mui/icons-material/Close';
+import CheckIcon from '@mui/icons-material/Check';
 import NoteAddOutlinedIcon from '@mui/icons-material/NoteAddOutlined';
 import InsertDriveFileOutlinedIcon from '@mui/icons-material/InsertDriveFileOutlined';
 import KeyboardDoubleArrowLeftIcon from '@mui/icons-material/KeyboardDoubleArrowLeft';
@@ -14,16 +15,26 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 
 import { Document, Collection } from '../types';
 
+interface UploadItem {
+    id: string;
+    file: File;
+    progress: number;
+    status: 'pending' | 'uploading' | 'completed' | 'error';
+    error?: string;
+}
+
 interface LibraryViewProps {
-    onUpload: (file: File) => Promise<void>;
+    onUpload: (files: File[]) => void;
     onBack: () => void;
     isUploading: boolean;
+    uploadQueue: UploadItem[];
+    onClearQueue: () => void;
     isUploadOpen: boolean;
     setIsUploadOpen: (open: boolean) => void;
     onPreview: (doc: Document) => void;
 }
 
-const LibraryView: React.FC<LibraryViewProps> = ({ onUpload, onBack, isUploading, isUploadOpen, setIsUploadOpen, onPreview }) => {
+const LibraryView: React.FC<LibraryViewProps> = ({ onUpload, onBack, isUploading, uploadQueue, onClearQueue, isUploadOpen, setIsUploadOpen, onPreview }) => {
     const [tabIndex, setTabIndex] = useState(0);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [searchQuery, setSearchQuery] = useState('');
@@ -65,24 +76,21 @@ const LibraryView: React.FC<LibraryViewProps> = ({ onUpload, onBack, isUploading
     };
 
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        if (file) {
-            handleUploadWrapper(file);
+        if (event.target.files && event.target.files.length > 0) {
+            handleUploadWrapper(Array.from(event.target.files));
         }
     };
 
     const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
         event.preventDefault();
-        const file = event.dataTransfer.files?.[0];
-        if (file) {
-            handleUploadWrapper(file);
+        if (event.dataTransfer.files && event.dataTransfer.files.length > 0) {
+            handleUploadWrapper(Array.from(event.dataTransfer.files));
         }
     };
 
-    const handleUploadWrapper = async (file: File) => {
-        await onUpload(file);
-        setIsUploadOpen(false);
-        fetchData(); // Refresh list after upload
+    const handleUploadWrapper = (files: File[]) => {
+        onUpload(files);
+        // setIsUploadOpen(false); // Keep open to show progress
     };
 
     const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
@@ -140,12 +148,12 @@ const LibraryView: React.FC<LibraryViewProps> = ({ onUpload, onBack, isUploading
             {/* Loading Overlay */}
             <Backdrop
                 sx={{ color: '#fff', zIndex: (theme) => theme.zIndex.drawer + 1, position: 'absolute' }}
-                open={isUploading || isLoadingData}
+                open={isLoadingData}
             >
                 <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                     <CircularProgress color="inherit" />
                     <Typography variant="body2" sx={{ mt: 2, color: 'white' }}>
-                        {isUploading ? "Uploading..." : "Loading Library..."}
+                        Loading Library...
                     </Typography>
                 </Box>
             </Backdrop>
@@ -216,6 +224,10 @@ const LibraryView: React.FC<LibraryViewProps> = ({ onUpload, onBack, isUploading
                 </Fade>
             ) : (
                 <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+
+                    {/* Upload Queue */}
+
+
                     <TextField
                         fullWidth
                         placeholder="Search sources & collections..."
@@ -372,19 +384,48 @@ const LibraryView: React.FC<LibraryViewProps> = ({ onUpload, onBack, isUploading
                     <IconButton size="small" onClick={() => setIsUploadOpen(false)}><CloseIcon fontSize="small" /></IconButton>
                 </DialogTitle>
                 <DialogContent>
-                    <div
-                        className="upload-drop-zone"
-                        onDrop={handleDrop}
-                        onDragOver={handleDragOver}
-                        onClick={() => fileInputRef.current?.click()}
-                    >
-                        <Box sx={{ p: 2, borderRadius: '50%', bgcolor: 'var(--bg-subtle)', mb: 2, color: 'var(--color-accent)' }}>
-                            <CloudUploadOutlinedIcon sx={{ fontSize: 32 }} />
+                    {uploadQueue.length === 0 ? (
+                        <div
+                            className="upload-drop-zone"
+                            onDrop={handleDrop}
+                            onDragOver={handleDragOver}
+                            onClick={() => fileInputRef.current?.click()}
+                        >
+                            <Box sx={{ p: 2, borderRadius: '50%', bgcolor: 'var(--bg-subtle)', mb: 2, color: 'var(--color-accent)' }}>
+                                <CloudUploadOutlinedIcon sx={{ fontSize: 32 }} />
+                            </Box>
+                            <Typography variant="body1" fontWeight="600">Upload documents</Typography>
+                            <Typography variant="caption" sx={{ color: 'var(--text-muted)', mb: 3 }}>Drag & drop or Browse</Typography>
+                        </div>
+                    ) : (
+                        /* Upload Queue in Dialog */
+                        <Box sx={{ mt: 0, maxHeight: '300px', overflowY: 'auto' }}>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2, alignItems: 'center' }}>
+                                <Typography variant="subtitle2" fontWeight="bold">Upload Status</Typography>
+                                <Button size="small" onClick={onClearQueue} disabled={isUploading}>
+                                    {isUploading ? 'Uploading...' : 'Done / Upload More'}
+                                </Button>
+                            </Box>
+                            {uploadQueue.map(item => (
+                                <Box key={item.id} sx={{ mb: 2 }}>
+                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                                        <Typography variant="body2" noWrap sx={{ maxWidth: '70%' }}>{item.file.name}</Typography>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                            {item.status === 'completed' && <CheckIcon color="success" fontSize="small" />}
+                                            {item.status === 'error' && <CloseIcon color="error" fontSize="small" />}
+                                            <Typography variant="caption" color={item.status === 'error' ? 'error' : 'textSecondary'}>
+                                                {item.status === 'uploading' ? `${item.progress}%` : item.status}
+                                            </Typography>
+                                        </Box>
+                                    </Box>
+                                    <LinearProgress variant="determinate" value={item.progress} color={item.status === 'error' ? 'error' : item.status === 'completed' ? 'success' : 'primary'} />
+                                    {item.error && <Typography variant="caption" color="error">{item.error}</Typography>}
+                                </Box>
+                            ))}
                         </Box>
-                        <Typography variant="body1" fontWeight="600">Upload documents</Typography>
-                        <Typography variant="caption" sx={{ color: 'var(--text-muted)', mb: 3 }}>Drag & drop or Browse</Typography>
-                    </div>
-                    <input type="file" ref={fileInputRef} style={{ display: 'none' }} onChange={handleFileChange} />
+                    )}
+
+                    <input type="file" multiple ref={fileInputRef} style={{ display: 'none' }} onChange={handleFileChange} />
                 </DialogContent>
             </Dialog>
 
