@@ -1,3 +1,7 @@
+logging:
+  level:
+    com.zaxxer.hikari: DEBUG
+
 spring:
   application:
     name: cita
@@ -15,6 +19,12 @@ spring:
     username: postgres
     password: postgres
     driver-class-name: org.postgresql.Driver
+    type: com.zaxxer.hikari.HikariDataSource
+    hikari:
+      minimum-idle: 5
+      maximum-pool-size: 20
+      idle-timeout: 30000
+      pool-name: CitaRAG-HikariCP
 
 server:
   tomcat:

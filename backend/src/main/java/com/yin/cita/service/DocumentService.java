@@ -254,24 +254,24 @@ public class DocumentService {
 
     @Transactional
     public void addDocumentToCollection(Long collectionId, Long documentId) {
-        // Verify existence
-        collectionRepository.findById(collectionId)
+        Collection collection = collectionRepository.findById(collectionId)
                 .orElseThrow(() -> new RuntimeException("Collection not found"));
-        documentRepository.findById(documentId)
+        Document document = documentRepository.findById(documentId)
                 .orElseThrow(() -> new RuntimeException("Document not found"));
 
-        collectionRepository.addDocument(collectionId, documentId);
+        collection.addDocument(document);
+        collectionRepository.save(collection);
     }
 
     @Transactional
     public void removeDocumentFromCollection(Long collectionId, Long documentId) {
-        // Verify existence
-        collectionRepository.findById(collectionId)
+        Collection collection = collectionRepository.findById(collectionId)
                 .orElseThrow(() -> new RuntimeException("Collection not found"));
-        documentRepository.findById(documentId)
+        Document document = documentRepository.findById(documentId)
                 .orElseThrow(() -> new RuntimeException("Document not found"));
 
-        collectionRepository.removeDocument(collectionId, documentId);
+        collection.removeDocument(document);
+        collectionRepository.save(collection);
     }
 
     private void saveOriginalFile(MultipartFile file) throws IOException {
