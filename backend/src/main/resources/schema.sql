@@ -5,7 +5,8 @@ CREATE TABLE IF NOT EXISTS documents (
     author VARCHAR(255),
     publication_date VARCHAR(255),
     upload_date TIMESTAMP,
-    content TEXT
+    content TEXT,
+    file_hash VARCHAR(64) UNIQUE
 );
 
 CREATE TABLE IF NOT EXISTS collections (

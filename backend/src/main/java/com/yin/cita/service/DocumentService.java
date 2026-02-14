@@ -21,6 +21,8 @@ import java.nio.file.Paths;
 import java.net.MalformedURLException;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 
 @Service
 public class DocumentService {
@@ -49,6 +51,14 @@ public class DocumentService {
     @Transactional
     public Document uploadAndParse(MultipartFile file) throws IOException {
         System.out.println("Processing file: " + file.getOriginalFilename());
+
+        // 0. Calculate Hash to prevent duplicates
+        String fileHash = calculateFileHash(file);
+        Optional<Document> existingDoc = documentRepository.findByFileHash(fileHash);
+        if (existingDoc.isPresent()) {
+            System.out.println("Document with hash " + fileHash + " already exists. Returning existing document.");
+            return existingDoc.get();
+        }
 
         // 1. (NEW) Save Original File to Disk
         // saveOriginalFile(file); // Disabled per user request (files managed by
@@ -103,6 +113,7 @@ public class DocumentService {
         document.setAuthor(truncate(author, 255));
         document.setPublicationDate(truncate(publicationDate, 255));
         document.setContent(result.getContent()); // Save full content
+        document.setFileHash(fileHash);
         document.setUploadDate(LocalDateTime.now());
 
         Document savedDoc = documentRepository.save(document);
@@ -137,6 +148,23 @@ public class DocumentService {
 
     public Optional<Collection> getCollectionById(Long id) {
         return collectionRepository.findById(id);
+    }
+
+    private String calculateFileHash(MultipartFile file) throws IOException {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(file.getBytes());
+            StringBuilder hexString = new StringBuilder();
+            for (byte b : hash) {
+                String hex = Integer.toHexString(0xff & b);
+                if (hex.length() == 1)
+                    hexString.append('0');
+                hexString.append(hex);
+            }
+            return hexString.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException("SHA-256 algorithm not found", e);
+        }
     }
 
     @Transactional
