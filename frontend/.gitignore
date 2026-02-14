@@ -28,6 +28,7 @@ main.js
 main.css
 dist/
 build/
+files/
 
 # os
 .DS_Store
