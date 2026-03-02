@@ -3,37 +3,14 @@
 This guide explains how to install and debug the CitaRAG writing assistant plugin in your local Obsidian environment.
 
 ## 1. Prerequisites
-- **Node.js & npm**: Installed on your machine.
-- **Backend Service**: Ensure the CitaRAG Java backend is running (usually at `http://localhost:8080`).
+- **Backend Service**: Ensure the CitaRAG Java backend is running either locally (usually at `http://localhost:8080`) or hosted remotely. The plugin connects to this backend.
 
-## 2. Installation (Local Development)
+## 2. Installation (End-Users)
 
-### Step 1: Build the plugin
-Navigate to the `frontend` directory and run:
-```bash
-npm install
-npm run build
-```
-This will generate `main.js` and `manifest.json` in the `frontend` root.
-
-### Step 2: Create the plugin folder in Obsidian
-1. Open Obsidian.
-2. Go to `Settings` > `Community plugins`.
-3. Click the folder icon next to "Installed plugins" to open your vault's plugin folder.
-4. Create a new folder named `citarag-obsidian`.
-
-### Step 3: Copy plugin files
-Copy the following files from your `frontend` directory into the `citarag-obsidian` folder:
-- `main.js`
-- `manifest.json`
-- `src/index.css` (Rename or ensure it's loaded if styles are external, though the current build bundles styles into `main.js` or requires a `styles.css` file in the plugin root).
-
-*Note: Obsidian expects `styles.css` in the plugin root for custom styling.*
-
-### Step 4: Enable the plugin
-1. In Obsidian, go to `Settings` > `Community plugins`.
-2. Click "Refresh" to see CitaRAG.
-3. Toggle it **ON**.
+1. Go to the [Releases page](https://github.com/superegg/CitaRAG/releases) of this repository.
+2. Download the `citarag-obsidian.zip` file from the latest release.
+3. Extract the contents into your Obsidian vault's plugins folder: `.obsidian/plugins/citarag-obsidian/`.
+4. In Obsidian, go to `Settings` > `Community plugins`, click "Refresh," and toggle CitaRAG **ON**.
 
 ## 3. Usage
 - Click the **Bot icon** in the left ribbon to open the CitaRAG Writing Assistant in the right sidebar.

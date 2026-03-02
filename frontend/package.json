@@ -7,6 +7,7 @@
     "dev": "node esbuild.config.mjs",
     "bundle-css": "cat src/index.css src/App.css > styles.css",
     "build": "npm run bundle-css && tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+    "build:zip": "npm run build && zip citarag-obsidian.zip main.js manifest.json styles.css",
     "version": "node version-bump.mjs && git add manifest.json versions.json"
   },
   "dependencies": {
