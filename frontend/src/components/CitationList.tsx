@@ -13,20 +13,28 @@ interface Citation {
 
 interface CitationListProps {
     citations: Citation[];
+    onCitationClick: (citation: Citation) => void;
 }
 
-const CitationList: React.FC<CitationListProps> = ({ citations }) => {
+const CitationList: React.FC<CitationListProps> = ({ citations, onCitationClick }) => {
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
             {citations.map((citation, idx) => (
                 <Paper
                     key={idx}
                     elevation={0}
+                    onClick={() => onCitationClick(citation)}
                     sx={{
                         p: 1.5,
                         borderRadius: 1,
                         border: '1px solid var(--divider-color)',
                         bgcolor: 'var(--background-primary) !important',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                        '&:hover': {
+                            borderColor: '#4f46e5',
+                            bgcolor: 'rgba(79, 70, 229, 0.04) !important',
+                        }
                     }}
                 >
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>

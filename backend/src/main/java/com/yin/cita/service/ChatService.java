@@ -83,9 +83,6 @@ public class ChatService {
                 "USER QUESTION: " + query + "\n\n" +
                 "INSTRUCTIONS: Provide a concise and accurate answer based ONLY on the provided context. " +
                 "If the context doesn't contain the answer, say you don't know.\n" +
-                "CITATION: You MUST cite your sources using the format (Title, Author) inline. " +
-                "For example: (The Study of Everything, Smith). Do not use numbered citations like [1]. " +
-                "Use the metadata provided in the context blocks to find the Title and Author.\n" +
                 "FORMAT: Use Markdown to structure your response. CRITICAL: Always use a double-newline before starting a list. "
                 +
                 "Each list item MUST start on a new line with a hyphen and a space (e.g., '\\n\\n- Item 1\\n- Item 2'). "

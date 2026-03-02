@@ -779,7 +779,7 @@ function App({ app }: AppProps) {
                 <Typography variant="caption" fontWeight="bold">Sources</Typography>
                 <Typography variant="caption" sx={{ cursor: 'pointer', color: 'var(--text-accent)' }} onClick={() => setActiveCitations([])}>Close</Typography>
               </Box>
-              <CitationList citations={activeCitations} />
+              <CitationList citations={activeCitations} onCitationClick={handleCitationClick} />
             </Box>
           </Collapse>
 
@@ -811,7 +811,15 @@ function App({ app }: AppProps) {
                   '& .MuiInputBase-input': {
                     fontSize: '0.9rem',
                     lineHeight: 1.6,
-                    color: 'var(--text-normal)'
+                    color: 'var(--text-normal)',
+                    border: 'none',
+                    boxShadow: 'none',
+                    outline: 'none',
+                    '&:focus': {
+                      border: 'none',
+                      boxShadow: 'none',
+                      outline: 'none',
+                    }
                   }
                 }}
               />

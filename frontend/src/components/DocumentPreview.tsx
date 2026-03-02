@@ -15,7 +15,7 @@ interface DocumentPreviewProps {
     app?: ObsidianApp;
 }
 
-const DocumentPreview: React.FC<DocumentPreviewProps> = ({ document, highlightText, onClose, isLoading, app }) => {
+const DocumentPreview: React.FC<DocumentPreviewProps> = ({ document, highlightText, initialPage, onClose, isLoading, app }) => {
     const contentRef = useRef<HTMLDivElement>(null);
 
     // Scroll to highlight for text mode
@@ -43,7 +43,6 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ document, highlightTe
             // PDF RENDERER (Native)
             let fileUrl = `http://localhost:8080/api/documents/${document!.id}/content`;
 
-            // If running in Obsidian and we have the app instance, try to load from local file system
             if (app) {
                 // User requested: .obsidian/plugins/citarag/files/
                 // We use app.vault.configDir to get '.obsidian' (or whatever it is renamed to)
@@ -55,6 +54,10 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({ document, highlightTe
                 if (resourcePath) {
                     fileUrl = resourcePath;
                 }
+            }
+
+            if (initialPage) {
+                fileUrl += `#page=${initialPage}`;
             }
 
             return (
