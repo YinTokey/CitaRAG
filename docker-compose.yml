@@ -78,6 +78,23 @@ services:
       - "etcd"
       - "minio"
 
+  backend:
+    build: backend
+    container_name: citarag-backend
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/citarag
+      - LANGCHAIN4J_MILVUS_HOST=milvus
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      milvus:
+        condition: service_healthy
+    volumes:
+      - backend_data:/app/data/uploads
+
 networks:
   default:
     name: milvus
@@ -87,3 +104,4 @@ volumes:
   etcd_data:
   minio_data:
   milvus_data:
+  backend_data:
