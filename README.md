@@ -5,7 +5,7 @@ CitaRAG is a Retrieval-Augmented Generation (RAG) Writing Assistant designed pri
 
 To run the entire CitaRAG stack locally (including the Java Backend, PostgreSQL, and Milvus Vector Store), follow these steps:
 
-1. **Set your OpenAI API Key**: Create a file named `.env` in the root directory (same folder as `docker-compose.yml`) and add your key:
+1. **Set your OpenAI API Key**: Create a file named `.env` in the backend directory and add your key:
    ```env
    OPENAI_API_KEY=sk-your-openai-api-key-here
    ```
