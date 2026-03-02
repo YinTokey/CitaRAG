@@ -29,7 +29,8 @@ public class ChatService {
     @Autowired
     private VectorStoreService vectorStoreService;
 
-    public void streamChat(String query, String modelName, SseEmitter emitter) {
+    public void streamChat(String query, String modelName, String customApiKey, SseEmitter emitter) {
+        String finalApiKey = (customApiKey != null && !customApiKey.isEmpty()) ? customApiKey : openAiApiKey;
 
         // 1. Retrieve relevant chunks
         List<EmbeddingMatch<TextSegment>> matches = vectorStoreService.findRelevant(query, 5);
@@ -90,7 +91,7 @@ public class ChatService {
                 "Use bold for key terms and code blocks for code snippets.";
 
         StreamingChatLanguageModel streamingModel = OpenAiStreamingChatModel.builder()
-                .apiKey(openAiApiKey)
+                .apiKey(finalApiKey)
                 .modelName(modelName != null && !modelName.isEmpty() ? modelName : "gpt-5-mini")
                 .temperature(1.0)
                 .timeout(java.time.Duration.ofSeconds(120))

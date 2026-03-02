@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { App as ObsidianApp } from 'obsidian';
-import { Box, Paper, TextField, IconButton, Typography, CircularProgress, Button, Collapse, Fade, Menu, MenuItem, ListItemIcon, ListItemText, List, ListItem, Divider, LinearProgress, Tooltip } from '@mui/material';
+import { Box, Paper, TextField, IconButton, Typography, CircularProgress, Button, Collapse, Fade, Menu, MenuItem, ListItemIcon, ListItemText, List, ListItem, Divider, LinearProgress, Tooltip, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
 import CopyAllIcon from '@mui/icons-material/CopyAll';
 import ThumbUpOutlinedIcon from '@mui/icons-material/ThumbUpOutlined';
 import ArticleOutlinedIcon from '@mui/icons-material/ArticleOutlined';
@@ -73,6 +73,8 @@ function App({ app }: AppProps) {
   const [headerMenuAnchor, setHeaderMenuAnchor] = useState<null | HTMLElement>(null);
   const [modelMenuAnchor, setModelMenuAnchor] = useState<null | HTMLElement>(null);
   const [selectedModel, setSelectedModel] = useState<any>(null);
+  const [isApiKeyDialogOpen, setIsApiKeyDialogOpen] = useState(false);
+  const [apiKey, setApiKey] = useState(localStorage.getItem('openai_api_key') || '');
 
 
   // Navigation State
@@ -267,7 +269,8 @@ function App({ app }: AppProps) {
         },
         body: JSON.stringify({
           query: userMsg.text,
-          model: selectedModel ? selectedModel.id : 'phi3:mini'
+          model: selectedModel ? selectedModel.id : 'gpt-5-mini',
+          apiKey: apiKey
         }),
       });
 
@@ -350,8 +353,11 @@ function App({ app }: AppProps) {
     setHeaderMenuAnchor(event.currentTarget);
   };
 
-  const handleHeaderMenuClose = () => {
+  const handleHeaderMenuClose = (action?: string) => {
     setHeaderMenuAnchor(null);
+    if (action === 'api-key') {
+      setIsApiKeyDialogOpen(true);
+    }
   };
 
   const handlePlusClick = (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -590,22 +596,7 @@ function App({ app }: AppProps) {
             <DriveFileRenameOutlineIcon sx={{ fontSize: 16 }} />
           </IconButton>
 
-          <IconButton
-            size="small"
-            sx={{
-              bgcolor: 'var(--background-primary)',
-              color: 'var(--text-normal)',
-              border: '1px solid var(--background-modifier-border)',
-              borderRadius: '8px',
-              width: 32,
-              height: 32,
-              p: 0,
-              '&:hover': { bgcolor: 'var(--background-modifier-hover)' },
-              boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-            }}
-          >
-            <HistoryIcon sx={{ fontSize: 16 }} />
-          </IconButton>
+          {/* History Icon Removed per User Request */}
 
           <IconButton
             size="small"
@@ -643,8 +634,50 @@ function App({ app }: AppProps) {
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
       >
-        <MenuItem onClick={handleHeaderMenuClose} sx={{ fontSize: '0.9rem' }}>Settings</MenuItem>
+        <MenuItem onClick={() => handleHeaderMenuClose('api-key')} sx={{ fontSize: '0.9rem' }}>OpenAI API Key</MenuItem>
       </Menu>
+
+      <Dialog
+        open={isApiKeyDialogOpen}
+        onClose={() => setIsApiKeyDialogOpen(false)}
+        PaperProps={{
+          sx: {
+            bgcolor: 'var(--background-primary)',
+            color: 'var(--text-normal)',
+            borderRadius: 3,
+            minWidth: 320
+          }
+        }}
+      >
+        <DialogTitle>OpenAI Settings</DialogTitle>
+        <DialogContent>
+          <Typography variant="caption" sx={{ mb: 1, display: 'block', color: 'var(--text-muted)' }}>
+            Enter your OpenAI API Key. It will be stored locally in your browser and used for chat requests.
+          </Typography>
+          <TextField
+            fullWidth
+            type="password"
+            placeholder="sk-..."
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            variant="outlined"
+            size="small"
+            sx={{ mt: 1 }}
+          />
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button onClick={() => setIsApiKeyDialogOpen(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={() => {
+              localStorage.setItem('openai_api_key', apiKey);
+              setIsApiKeyDialogOpen(false);
+            }}
+          >
+            Save
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* MAIN VIEW: Chat & Input */}
       <Box sx={{
@@ -714,12 +747,19 @@ function App({ app }: AppProps) {
                   '& th, & td': { border: '1px solid #ddd', p: 1, textAlign: 'left' },
                   '& th': { bgcolor: '#f8f9fa' }
                 }}>
-                  {renderMessageContent(msg)}
+                  {msg.text.length === 0 && isChatting && idx === messages.length - 1 ? (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <CircularProgress size={16} sx={{ color: 'var(--text-accent)' }} />
+                      <Typography variant="body2" sx={{ color: 'var(--text-muted)' }}>Thinking...</Typography>
+                    </Box>
+                  ) : (
+                    renderMessageContent(msg)
+                  )}
                 </Box>
               </Box>
 
               {/* Citations & Actions Row (Bot Only) */}
-              {msg.sender === 'bot' && (
+              {msg.sender === 'bot' && (!isChatting || idx !== messages.length - 1) && (
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%', ml: 1 }}>
                   {msg.citations && msg.citations.length > 0 && (
                     <Button
@@ -744,14 +784,7 @@ function App({ app }: AppProps) {
                   <Box sx={{ flexGrow: 1 }} />
 
                   {/* Action Buttons */}
-                  <Box sx={{ display: 'flex', gap: 0.5 }}>
-                    <IconButton size="small" sx={{ p: 0.4, color: 'var(--text-muted)' }} onClick={() => navigator.clipboard.writeText(msg.text)}>
-                      <CopyAllIcon sx={{ fontSize: 14 }} />
-                    </IconButton>
-                    <IconButton size="small" sx={{ p: 0.4, color: 'var(--text-muted)' }}>
-                      <ThumbUpOutlinedIcon sx={{ fontSize: 14 }} />
-                    </IconButton>
-                  </Box>
+
                 </Box>
               )}
             </Box>
