@@ -29,6 +29,9 @@ main.css
 dist/
 build/
 files/
+*.zip
+*.mjs
+*.pdf
 
 # os
 .DS_Store
