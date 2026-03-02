@@ -1,10 +1,8 @@
 package com.yin.cita.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.yin.cita.model.Collection;
 import com.yin.cita.model.Document;
 import com.yin.cita.model.FileParsingResult;
-import com.yin.cita.repository.CollectionRepository;
 import com.yin.cita.repository.DocumentRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,7 +26,6 @@ import java.security.NoSuchAlgorithmException;
 public class DocumentService {
 
     private final DocumentRepository documentRepository;
-    private final CollectionRepository collectionRepository;
     private final FileParserService fileParserService;
     private final VectorStoreService vectorStoreService;
     private final ChunkingService chunkingService;
@@ -37,12 +34,11 @@ public class DocumentService {
 
     private final Map<Long, Document> processingCache = new java.util.concurrent.ConcurrentHashMap<>();
 
-    public DocumentService(DocumentRepository documentRepository, CollectionRepository collectionRepository,
+    public DocumentService(DocumentRepository documentRepository,
             FileParserService fileParserService, VectorStoreService vectorStoreService,
             ChunkingService chunkingService,
             @org.springframework.beans.factory.annotation.Value("${citarag.files.upload-dir:data/uploads}") String uploadDir) {
         this.documentRepository = documentRepository;
-        this.collectionRepository = collectionRepository;
         this.fileParserService = fileParserService;
         this.vectorStoreService = vectorStoreService;
         this.chunkingService = chunkingService;
@@ -220,21 +216,6 @@ public class DocumentService {
         }
     }
 
-    @Transactional
-    public Collection createCollection(String name, String description) {
-        Collection collection = new Collection(name);
-        collection.setDescription(description);
-        return collectionRepository.save(collection);
-    }
-
-    public List<Collection> getAllCollections() {
-        return collectionRepository.findAll();
-    }
-
-    public Optional<Collection> getCollectionById(Long id) {
-        return collectionRepository.findById(id);
-    }
-
     private String calculateFileHash(MultipartFile file) throws IOException {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
@@ -250,28 +231,6 @@ public class DocumentService {
         } catch (NoSuchAlgorithmException e) {
             throw new RuntimeException("SHA-256 algorithm not found", e);
         }
-    }
-
-    @Transactional
-    public void addDocumentToCollection(Long collectionId, Long documentId) {
-        Collection collection = collectionRepository.findById(collectionId)
-                .orElseThrow(() -> new RuntimeException("Collection not found"));
-        Document document = documentRepository.findById(documentId)
-                .orElseThrow(() -> new RuntimeException("Document not found"));
-
-        collection.addDocument(document);
-        collectionRepository.save(collection);
-    }
-
-    @Transactional
-    public void removeDocumentFromCollection(Long collectionId, Long documentId) {
-        Collection collection = collectionRepository.findById(collectionId)
-                .orElseThrow(() -> new RuntimeException("Collection not found"));
-        Document document = documentRepository.findById(documentId)
-                .orElseThrow(() -> new RuntimeException("Document not found"));
-
-        collection.removeDocument(document);
-        collectionRepository.save(collection);
     }
 
     private void saveOriginalFile(MultipartFile file) throws IOException {

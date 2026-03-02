@@ -6,8 +6,6 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
-import java.util.HashSet;
-import java.util.Set;
 
 @Data
 @NoArgsConstructor
@@ -57,10 +55,6 @@ public class Document {
     @Transient
     @Schema(description = "Error message if processing failed")
     private String errorMessage;
-
-    @ManyToMany(mappedBy = "documents")
-    @Schema(description = "Collections this document belongs to")
-    private Set<Collection> collections = new HashSet<>();
 
     public Document(String filename, String author) {
         this.uploadDate = LocalDateTime.now();
