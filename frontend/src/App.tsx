@@ -73,8 +73,7 @@ function App({ app }: AppProps) {
   const [headerMenuAnchor, setHeaderMenuAnchor] = useState<null | HTMLElement>(null);
   const [modelMenuAnchor, setModelMenuAnchor] = useState<null | HTMLElement>(null);
   const [selectedModel, setSelectedModel] = useState<any>(null);
-  const [isApiKeyDialogOpen, setIsApiKeyDialogOpen] = useState(false);
-  const [apiKey, setApiKey] = useState(localStorage.getItem('openai_api_key') || '');
+  const [apiKey, setApiKey] = useState(localStorage.getItem('openai_api_key') || ''); // Keeping in state but removing UI
 
 
   // Navigation State
@@ -269,8 +268,7 @@ function App({ app }: AppProps) {
         },
         body: JSON.stringify({
           query: userMsg.text,
-          model: selectedModel ? selectedModel.id : 'gpt-5-mini',
-          apiKey: apiKey
+          model: selectedModel ? selectedModel.id : 'gpt-5-mini'
         }),
       });
 
@@ -355,9 +353,6 @@ function App({ app }: AppProps) {
 
   const handleHeaderMenuClose = (action?: string) => {
     setHeaderMenuAnchor(null);
-    if (action === 'api-key') {
-      setIsApiKeyDialogOpen(true);
-    }
   };
 
   const handlePlusClick = (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -598,86 +593,10 @@ function App({ app }: AppProps) {
 
           {/* History Icon Removed per User Request */}
 
-          <IconButton
-            size="small"
-            onClick={handleHeaderMoreClick}
-            sx={{
-              bgcolor: 'var(--background-primary)',
-              color: 'var(--text-normal)',
-              border: '1px solid var(--background-modifier-border)',
-              borderRadius: '8px',
-              width: 32,
-              height: 32,
-              p: 0,
-              '&:hover': { bgcolor: 'var(--background-modifier-hover)' },
-              boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-            }}
-          >
-            <MoreHorizIcon sx={{ fontSize: 16 }} />
-          </IconButton>
         </Box>
       )}
 
-      {/* HEADER MENU */}
-      <Menu
-        anchorEl={headerMenuAnchor}
-        open={Boolean(headerMenuAnchor)}
-        onClose={handleHeaderMenuClose}
-        PaperProps={{
-          sx: {
-            bgcolor: 'var(--background-primary)',
-            border: '1px solid var(--background-modifier-border)',
-            borderRadius: 2,
-            minWidth: 150
-          }
-        }}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-      >
-        <MenuItem onClick={() => handleHeaderMenuClose('api-key')} sx={{ fontSize: '0.9rem' }}>OpenAI API Key</MenuItem>
-      </Menu>
 
-      <Dialog
-        open={isApiKeyDialogOpen}
-        onClose={() => setIsApiKeyDialogOpen(false)}
-        PaperProps={{
-          sx: {
-            bgcolor: 'var(--background-primary)',
-            color: 'var(--text-normal)',
-            borderRadius: 3,
-            minWidth: 320
-          }
-        }}
-      >
-        <DialogTitle>OpenAI Settings</DialogTitle>
-        <DialogContent>
-          <Typography variant="caption" sx={{ mb: 1, display: 'block', color: 'var(--text-muted)' }}>
-            Enter your OpenAI API Key. It will be stored locally in your browser and used for chat requests.
-          </Typography>
-          <TextField
-            fullWidth
-            type="password"
-            placeholder="sk-..."
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            variant="outlined"
-            size="small"
-            sx={{ mt: 1 }}
-          />
-        </DialogContent>
-        <DialogActions sx={{ p: 2 }}>
-          <Button onClick={() => setIsApiKeyDialogOpen(false)}>Cancel</Button>
-          <Button
-            variant="contained"
-            onClick={() => {
-              localStorage.setItem('openai_api_key', apiKey);
-              setIsApiKeyDialogOpen(false);
-            }}
-          >
-            Save
-          </Button>
-        </DialogActions>
-      </Dialog>
 
       {/* MAIN VIEW: Chat & Input */}
       <Box sx={{

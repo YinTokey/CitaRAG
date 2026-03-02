@@ -3,13 +3,18 @@ CitaRAG is a Retrieval-Augmented Generation (RAG) Writing Assistant designed pri
 
 ## Quick Start
 
-To run the entire CitaRAG stack locally (including the Java Backend, PostgreSQL, and Milvus Vector Store), simply ensure Docker is installed and run:
+To run the entire CitaRAG stack locally (including the Java Backend, PostgreSQL, and Milvus Vector Store), follow these steps:
 
-```bash
-# Build and start the backend services
-docker compose up --build
-```
-*Note: You do **not** need to set the OpenAI API key as an environment variable. You can input it directly in the **Settings** (top right corner) of the Obsidian plugin once it is running.*
+1. **Set your OpenAI API Key**: Create a file named `.env` in the root directory (same folder as `docker-compose.yml`) and add your key:
+   ```env
+   OPENAI_API_KEY=sk-your-openai-api-key-here
+   ```
+
+2. **Start the stack**:
+   ```bash
+   docker compose up --build
+   ```
+*Note: The backend will use this key for both document embedding and chat generation.*
 
 
 ## Installing the Obsidian Plugin

@@ -26,7 +26,6 @@ public class ChatController {
             @RequestBody com.yin.cita.dto.ChatRequest request) {
         String query = request.getQuery();
         String model = request.getModel();
-        String apiKey = request.getApiKey();
 
         org.springframework.web.servlet.mvc.method.annotation.SseEmitter emitter = new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(
                 300000L); // 5 minutes timeout
@@ -40,7 +39,7 @@ public class ChatController {
             return emitter;
         }
 
-        chatService.streamChat(query, model, apiKey, emitter);
+        chatService.streamChat(query, model, emitter);
         return emitter;
     }
 }

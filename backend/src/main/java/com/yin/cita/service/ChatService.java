@@ -29,8 +29,8 @@ public class ChatService {
     @Autowired
     private VectorStoreService vectorStoreService;
 
-    public void streamChat(String query, String modelName, String customApiKey, SseEmitter emitter) {
-        String finalApiKey = (customApiKey != null && !customApiKey.isEmpty()) ? customApiKey : openAiApiKey;
+    public void streamChat(String query, String modelName, SseEmitter emitter) {
+        String finalApiKey = openAiApiKey;
 
         // 1. Retrieve relevant chunks
         List<EmbeddingMatch<TextSegment>> matches = vectorStoreService.findRelevant(query, 5);

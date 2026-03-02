@@ -81,12 +81,13 @@ services:
   backend:
     build: backend
     container_name: citarag-backend
+    env_file:
+      - backend/.env
     ports:
       - "8080:8080"
     environment:
       - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/citarag
       - LANGCHAIN4J_MILVUS_HOST=milvus
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
     depends_on:
       postgres:
         condition: service_healthy
