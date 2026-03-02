@@ -38,16 +38,9 @@ langchain4j:
       api-key: ${OPENAI_API_KEY:demo}
       model-name: gpt-5-mini
       temperature: 1.0
-  ollama:
-    embedding-model:
-      base-url: http://127.0.0.1:11434
-      model-name: embeddinggemma:300m-qat-q8_0
-      timeout: 120s
-    chat-model:
-      base-url: http://127.0.0.1:11435
-      timeout: 120s
+
   milvus:
     host: 127.0.0.1
     port: 19530
     collection-name: citarag
-    dimension: 768 # EmbeddingGemma-300m dimension
+    dimension: 1536 # text-embedding-3-small dimension

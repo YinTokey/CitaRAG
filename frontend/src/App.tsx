@@ -45,19 +45,22 @@ type ViewState = 'chat' | 'menu' | 'library';
 
 const AVAILABLE_MODELS = [
   {
-    id: 'gemma3:1b',
-    name: 'Gemma 3 1B'
+    id: 'gpt-4o',
+    name: 'GPT-4o'
   },
   {
-    id: 'qwen2.5:1.5b',
-    name: 'Qwen 2.5 1.5B',
+    id: 'gpt-4o-mini',
+    name: 'GPT-4o Mini',
   },
   {
-    id: 'llama3.2:1b',
-    name: 'LLaMA 3.2 1B',
+    id: 'gpt-4-turbo',
+    name: 'GPT-4 Turbo',
   },
+  {
+    id: 'gpt-3.5-turbo',
+    name: 'GPT-3.5 Turbo',
+  }
 ];
-
 
 
 interface AppProps {

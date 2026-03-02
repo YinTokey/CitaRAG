@@ -1,6 +1,5 @@
 package com.yin.cita.controller;
 
-import com.yin.cita.service.OllamaService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
@@ -14,20 +13,14 @@ import java.util.Map;
 @CrossOrigin(origins = "http://localhost:5173") // Allow frontend access
 public class ModelController {
 
-    @Autowired
-    private OllamaService ollamaService;
-
     @GetMapping
     public List<String> listModels() {
-        return ollamaService.listModels();
+        return List.of("gpt-5-mini", "gpt-5-nano");
     }
 
     @PostMapping(value = "/pull", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<String> pullModel(@RequestBody Map<String, String> payload) {
-        String modelName = payload.get("name");
-        if (modelName == null || modelName.isEmpty()) {
-            return Flux.error(new IllegalArgumentException("Model name is required"));
-        }
-        return ollamaService.pullModel(modelName);
+        // Stub for frontend compatibility
+        return Flux.just("{\"status\":\"success\"}");
     }
 }

@@ -3,6 +3,7 @@ package com.yin.cita.service;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.model.StreamingResponseHandler;
+import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
 import dev.langchain4j.model.chat.StreamingChatLanguageModel;
 import dev.langchain4j.model.output.Response;
 import dev.langchain4j.store.embedding.EmbeddingMatch;
@@ -22,41 +23,16 @@ import java.util.stream.Collectors;
 @Service
 public class ChatService {
 
-    @Value("${langchain4j.ollama.chat-model.base-url:http://127.0.0.1:11435}")
-    private String ollamaBaseUrl;
+    @Value("${langchain4j.open-ai.chat-model.api-key:demo}")
+    private String openAiApiKey;
 
     @Autowired
     private VectorStoreService vectorStoreService;
-
-    @Autowired
-    private OllamaService ollamaService;
 
     // Cache models to avoid rebuilding on every request if possible,
     // but building is cheap so we can just build on demand.
 
     public void streamChat(String query, String modelName, SseEmitter emitter) {
-        // 0. Validate that the model exists before attempting inference
-        try {
-            List<String> availableModels = ollamaService.listModels();
-            String actualModelName = modelName != null && !modelName.isEmpty() ? modelName : "phi3:mini";
-
-            // Check if model exists (case-insensitive and handles tags like :latest)
-            boolean modelExists = availableModels.stream()
-                    .anyMatch(m -> m.toLowerCase().contains(actualModelName.toLowerCase().split(":")[0]));
-
-            if (!modelExists) {
-                Map<String, Object> errorEvent = new HashMap<>();
-                errorEvent.put("type", "error");
-                errorEvent.put("message", "Model '" + actualModelName
-                        + "' is not available. Please download it first from the model selector.");
-                emitter.send(SseEmitter.event().name("error").data(errorEvent));
-                emitter.complete();
-                return;
-            }
-        } catch (Exception e) {
-            System.err.println("Failed to check model availability: " + e.getMessage());
-            // Continue anyway - model check is best-effort
-        }
 
         // 1. Retrieve relevant chunks
         List<EmbeddingMatch<TextSegment>> matches = vectorStoreService.findRelevant(query, 5);
@@ -119,13 +95,12 @@ public class ChatService {
                 +
                 "Use bold for key terms and code blocks for code snippets.";
 
-        // Build Ollama Chat Model on demand with selected model
-        StreamingChatLanguageModel streamingModel = dev.langchain4j.model.ollama.OllamaStreamingChatModel.builder()
-                .baseUrl(ollamaBaseUrl)
-                .modelName(modelName != null && !modelName.isEmpty() ? modelName : "phi3:mini")
+        // Build OpenAI Chat Model on demand with selected model
+        StreamingChatLanguageModel streamingModel = OpenAiStreamingChatModel.builder()
+                .apiKey(openAiApiKey)
+                .modelName(modelName != null && !modelName.isEmpty() ? modelName : "gpt-4o-mini")
                 .timeout(java.time.Duration.ofSeconds(120))
                 .temperature(0.7) // Good default
-                .numCtx(8192) // Increase context window size
                 .build();
 
         System.out.println("DEBUG: Generated Prompt (First 500 chars): "

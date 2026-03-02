@@ -3,7 +3,7 @@ package com.yin.cita.service;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
-import dev.langchain4j.model.ollama.OllamaEmbeddingModel;
+import dev.langchain4j.model.openai.OpenAiEmbeddingModel;
 import dev.langchain4j.store.embedding.EmbeddingStore;
 import dev.langchain4j.store.embedding.milvus.MilvusEmbeddingStore;
 import org.springframework.beans.factory.annotation.Value;
@@ -17,14 +17,10 @@ import java.util.Map;
 @Service
 public class VectorStoreService {
 
-    @Value("${langchain4j.ollama.embedding-model.base-url}")
-    private String ollamaBaseUrl;
+    @Value("${langchain4j.open-ai.chat-model.api-key:demo}")
+    private String openAiApiKey;
 
-    @Value("${langchain4j.ollama.embedding-model.model-name}")
-    private String ollamaModelName;
-
-    @Value("${langchain4j.ollama.embedding-model.timeout}")
-    private java.time.Duration timeout;
+    private String openAiModelName = "text-embedding-3-small";
 
     @Value("${langchain4j.milvus.host}")
     private String milvusHost;
@@ -44,11 +40,12 @@ public class VectorStoreService {
     @PostConstruct
     public void init() {
         try {
-            // Initialize Embedding Model (Ollama)
-            this.embeddingModel = OllamaEmbeddingModel.builder()
-                    .baseUrl(ollamaBaseUrl)
-                    .modelName(ollamaModelName)
-                    .timeout(timeout)
+            // Initialize Embedding Model (OpenAI)
+            this.embeddingModel = OpenAiEmbeddingModel.builder()
+                    .apiKey(openAiApiKey)
+                    .modelName(openAiModelName)
+                    .dimensions(dimension)
+                    .timeout(java.time.Duration.ofSeconds(60))
                     .build();
 
             // Initialize Milvus Store
