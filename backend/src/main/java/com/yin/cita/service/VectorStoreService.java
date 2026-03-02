@@ -48,7 +48,6 @@ public class VectorStoreService {
                     .timeout(java.time.Duration.ofSeconds(60))
                     .build();
 
-            // Initialize Milvus Store
             this.embeddingStore = MilvusEmbeddingStore.builder()
                     .host(milvusHost)
                     .port(milvusPort)
@@ -57,37 +56,10 @@ public class VectorStoreService {
                     .retrieveEmbeddingsOnSearch(true) // Helper to retrieve embeddings if needed
                     .build();
 
-            // Warm-up the model to ensure it's loaded before user requests
-            warmUpModel();
-
         } catch (Exception e) {
             e.printStackTrace();
-            throw e;
+            throw new RuntimeException(e);
         }
-    }
-
-    private void warmUpModel() {
-        new Thread(() -> {
-            try {
-                System.out.println("Warming up embedding model...");
-                // Simple retry loop for warmup
-                int maxRetries = 5;
-                for (int i = 0; i < maxRetries; i++) {
-                    try {
-                        embeddingModel.embed(dev.langchain4j.data.segment.TextSegment.from("Warm up")).content();
-                        System.out.println("Embedding model warmed up and ready.");
-                        break;
-                    } catch (Exception e) {
-                        if (i == maxRetries - 1)
-                            throw e;
-                        System.err.println("Warmup attempt " + (i + 1) + " failed, retrying in 5s: " + e.getMessage());
-                        Thread.sleep(5000);
-                    }
-                }
-            } catch (Exception e) {
-                System.err.println("Failed to warm up model after retries: " + e.getMessage());
-            }
-        }).start();
     }
 
     public void storeChunks(List<Map<String, Object>> chunks) {

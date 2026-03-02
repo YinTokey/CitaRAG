@@ -37,7 +37,6 @@ langchain4j:
     chat-model:
       api-key: ${OPENAI_API_KEY:demo}
       model-name: gpt-5-mini
-      temperature: 1.0
 
   milvus:
     host: 127.0.0.1

@@ -29,9 +29,6 @@ public class ChatService {
     @Autowired
     private VectorStoreService vectorStoreService;
 
-    // Cache models to avoid rebuilding on every request if possible,
-    // but building is cheap so we can just build on demand.
-
     public void streamChat(String query, String modelName, SseEmitter emitter) {
 
         // 1. Retrieve relevant chunks
@@ -95,12 +92,11 @@ public class ChatService {
                 +
                 "Use bold for key terms and code blocks for code snippets.";
 
-        // Build OpenAI Chat Model on demand with selected model
         StreamingChatLanguageModel streamingModel = OpenAiStreamingChatModel.builder()
                 .apiKey(openAiApiKey)
-                .modelName(modelName != null && !modelName.isEmpty() ? modelName : "gpt-4o-mini")
+                .modelName(modelName != null && !modelName.isEmpty() ? modelName : "gpt-5-mini")
+                .temperature(1.0)
                 .timeout(java.time.Duration.ofSeconds(120))
-                .temperature(0.7) // Good default
                 .build();
 
         System.out.println("DEBUG: Generated Prompt (First 500 chars): "

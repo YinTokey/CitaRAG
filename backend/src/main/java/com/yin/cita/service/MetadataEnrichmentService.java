@@ -40,7 +40,6 @@ public class MetadataEnrichmentService {
         ChatLanguageModel model = OpenAiChatModel.builder()
                 .apiKey(apiKey)
                 .modelName(modelName)
-                .temperature(0.0) // Set to 0.0 for consistent metadata extraction
                 .build();
 
         this.enrichmentAgent = AiServices.create(EnrichmentAgent.class, model);

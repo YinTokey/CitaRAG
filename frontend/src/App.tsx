@@ -45,20 +45,12 @@ type ViewState = 'chat' | 'menu' | 'library';
 
 const AVAILABLE_MODELS = [
   {
-    id: 'gpt-4o',
-    name: 'GPT-4o'
+    id: 'gpt-5-mini',
+    name: 'GPT-5 Mini'
   },
   {
-    id: 'gpt-4o-mini',
-    name: 'GPT-4o Mini',
-  },
-  {
-    id: 'gpt-4-turbo',
-    name: 'GPT-4 Turbo',
-  },
-  {
-    id: 'gpt-3.5-turbo',
-    name: 'GPT-3.5 Turbo',
+    id: 'gpt-5-nano',
+    name: 'GPT-5 Nano',
   }
 ];
 
@@ -82,11 +74,6 @@ function App({ app }: AppProps) {
   const [modelMenuAnchor, setModelMenuAnchor] = useState<null | HTMLElement>(null);
   const [selectedModel, setSelectedModel] = useState<any>(null);
 
-  // Model Download State
-  const [isDownloadingModel, setIsDownloadingModel] = useState(false);
-  const [downloadProgress, setDownloadProgress] = useState(0);
-  const [downloadingModelName, setDownloadingModelName] = useState<string>('');
-  const [downloadAbortController, setDownloadAbortController] = useState<AbortController | null>(null);
 
   // Navigation State
   const [currentView, setCurrentView] = useState<ViewState>('chat');
@@ -108,26 +95,10 @@ function App({ app }: AppProps) {
   }, [messages]);
 
   useEffect(() => {
-    const checkModels = async () => {
-      try {
-        const response = await fetch('http://localhost:8080/api/models');
-        if (response.ok) {
-          const existingModels = await response.json();
-          if (existingModels && existingModels.length > 0) {
-            for (const avail of AVAILABLE_MODELS) {
-              const modelName = avail.id.split(':')[0];
-              if (existingModels.some((m: string) => m.includes(modelName))) {
-                setSelectedModel(avail);
-                return;
-              }
-            }
-          }
-        }
-      } catch (e) {
-        console.error("Failed to fetch initial models", e);
-      }
-    };
-    checkModels();
+    // Automatically select the first model
+    if (AVAILABLE_MODELS.length > 0) {
+      setSelectedModel(AVAILABLE_MODELS[0]);
+    }
   }, []);
 
   // Polling Effect
@@ -415,106 +386,11 @@ function App({ app }: AppProps) {
     if (!model) return;
 
     handleModelClose();
-
-    // check if model exists
-    try {
-      const response = await fetch('http://localhost:8080/api/models');
-      const models = await response.json();
-      const modelName = model.id.split(':')[0]; // Simple check
-
-      const exists = models.some((m: string) => m.includes(modelName));
-
-      if (exists) {
-        setSelectedModel(model);
-      } else {
-        // Pull model
-        const abortController = new AbortController();
-        setDownloadAbortController(abortController);
-        setIsDownloadingModel(true);
-        setDownloadProgress(0);
-        setDownloadingModelName(model.name);
-        try {
-          const pullResponse = await fetch('http://localhost:8080/api/models/pull', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: model.id }),
-            signal: abortController.signal
-          });
-
-          if (!pullResponse.ok) throw new Error("Failed to pull model");
-
-          const reader = pullResponse.body?.getReader();
-          const decoder = new TextDecoder();
-
-          if (reader) {
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) break;
-
-              const chunk = decoder.decode(value, { stream: true });
-              const lines = chunk.split('\n').filter(line => line.trim() !== '');
-
-              for (const line of lines) {
-                try {
-                  const jsonStr = line.startsWith('data:') ? line.slice(5) : line;
-                  const data = JSON.parse(jsonStr);
-
-                  // Log for debugging
-                  console.log('Ollama pull progress:', data);
-
-                  // Handle all possible status types from Ollama
-                  if (data.status) {
-                    // Check for completion
-                    if (data.status === 'success' || data.status.includes('success')) {
-                      setDownloadProgress(100);
-                    }
-                    // Check for progress with total/completed
-                    else if (data.total && data.completed) {
-                      const progress = (data.completed / data.total) * 100;
-                      setDownloadProgress(progress);
-                    }
-                    // If downloading/pulling but no progress info, show indeterminate (50%)
-                    else if (data.status.includes('downloading') ||
-                      data.status.includes('pulling') ||
-                      data.status.includes('verifying')) {
-                      // Keep progress bar visible but indeterminate
-                      if (downloadProgress === 0) {
-                        setDownloadProgress(10); // Show some activity
-                      }
-                    }
-                  }
-                } catch (e) {
-                  console.warn('Failed to parse progress:', line);
-                }
-              }
-            }
-          }
-
-          setSelectedModel(model);
-        } catch (e) {
-          console.error("Failed to download model", e);
-          alert("Failed to download model " + model.name);
-        } finally {
-          setIsDownloadingModel(false);
-          setDownloadProgress(0);
-          setDownloadingModelName('');
-          setDownloadAbortController(null);
-        }
-      }
-    } catch (e) {
-      console.error("Error checking/pulling model", e);
-      setSelectedModel(model); // Optimistic fallback
-    }
+    setSelectedModel(model);
   };
 
   const handleCancelDownload = () => {
-    if (downloadAbortController) {
-      downloadAbortController.abort();
-      setIsDownloadingModel(false);
-      setDownloadProgress(0);
-      setDownloadingModelName('');
-      setDownloadAbortController(null);
-    }
+    // Left empty since downloading models is obsolete
   };
 
   const handleNewChat = () => {
@@ -694,45 +570,7 @@ function App({ app }: AppProps) {
           alignItems: 'center',
           justifyContent: 'flex-end'
         }}>
-          {isDownloadingModel && (
-            <Fade in={isDownloadingModel}>
-              <Box sx={{
-                mr: 'auto', // push to left
-                display: 'flex',
-                alignItems: 'center',
-                gap: 1,
-                bgcolor: 'var(--background-primary)',
-                p: 0.5,
-                px: 1.5,
-                borderRadius: 2,
-                border: '1px solid var(--background-modifier-border)',
-                boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-              }}>
-                <CircularProgress size={14} thickness={5} />
-                <Typography variant="caption" sx={{ fontWeight: 600, color: 'var(--text-normal)' }}>
-                  Downloading {downloadingModelName || "Model"}...
-                </Typography>
-                <Box sx={{ width: 100, ml: 1 }}>
-                  <LinearProgress variant="determinate" value={downloadProgress} sx={{ height: 4, borderRadius: 2 }} />
-                </Box>
-                <Typography variant="caption" color="text.secondary" sx={{ minWidth: 35 }}>
-                  {Math.round(downloadProgress)}%
-                </Typography>
-                <IconButton
-                  size="small"
-                  onClick={handleCancelDownload}
-                  sx={{
-                    ml: 0.5,
-                    width: 20,
-                    height: 20,
-                    '&:hover': { bgcolor: 'var(--background-modifier-hover)' }
-                  }}
-                >
-                  <CloseIcon sx={{ fontSize: 14 }} />
-                </IconButton>
-              </Box>
-            </Fade>
-          )}
+
           <IconButton
             size="small"
             onClick={handleNewChat}
